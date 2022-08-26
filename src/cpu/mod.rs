@@ -4,16 +4,11 @@ pub mod opcode;
 
 use register::{Registers, RegisterType};
 use memory::Memory;
-use opcode::OPCODE_MAP;
+use opcode::{Addressing, OPCODE_MAP};
 
 pub struct CPU {
   pub registers: Registers,
   pub memory: Memory,
-}
-
-pub enum Addressing {
-  Immediate, ZeroPage, ZeroPageX, ZeroPageY, Absolute,
-  AbsoluteX, AbsoluteY, IndirectX, IndirectY, Implied,
 }
 
 impl CPU {

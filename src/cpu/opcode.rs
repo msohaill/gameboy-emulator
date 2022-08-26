@@ -1,6 +1,10 @@
 use std::collections::HashMap;
 use lazy_static::lazy_static;
-use super::Addressing;
+
+pub enum Addressing {
+  Immediate, ZeroPage, ZeroPageX, ZeroPageY, Absolute,
+  AbsoluteX, AbsoluteY, IndirectX, IndirectY, Implied,
+}
 
 pub struct OpCode {
   pub code: u8,
