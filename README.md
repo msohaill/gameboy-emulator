@@ -1,2 +1,2 @@
-# My Gameboy Emulator!
+# My NES Emulator!
 Just started here~
