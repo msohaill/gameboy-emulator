@@ -22,6 +22,16 @@ lazy_static! {
   pub static ref OPCODE_MAP : HashMap<u8, OpCode> = {
     let mut map = HashMap::new();
 
+    // AND
+    map.insert(0x29, OpCode::new(0x29, 2, Addressing::Immediate));
+    map.insert(0x25, OpCode::new(0x25, 2, Addressing::ZeroPage));
+    map.insert(0x35, OpCode::new(0x35, 2, Addressing::ZeroPageX));
+    map.insert(0x2D, OpCode::new(0x2D, 3, Addressing::Absolute));
+    map.insert(0x3D, OpCode::new(0x3D, 3, Addressing::AbsoluteX));
+    map.insert(0x39, OpCode::new(0x39, 3, Addressing::AbsoluteY));
+    map.insert(0x21, OpCode::new(0x21, 2, Addressing::IndirectX));
+    map.insert(0x31, OpCode::new(0x31, 2, Addressing::IndirectY));
+
     // BRK
     map.insert(0x00, OpCode::new(0x00, 1, Addressing::Implied));
 
@@ -42,6 +52,16 @@ lazy_static! {
 
     // DEY
     map.insert(0x88, OpCode::new(0x88, 1, Addressing::Implied));
+
+    // EOR
+    map.insert(0x49, OpCode::new(0x49, 2, Addressing::Immediate));
+    map.insert(0x45, OpCode::new(0x45, 2, Addressing::ZeroPage));
+    map.insert(0x55, OpCode::new(0x55, 2, Addressing::ZeroPageX));
+    map.insert(0x4D, OpCode::new(0x4D, 3, Addressing::Absolute));
+    map.insert(0x5D, OpCode::new(0x5D, 3, Addressing::AbsoluteX));
+    map.insert(0x59, OpCode::new(0x59, 3, Addressing::AbsoluteY));
+    map.insert(0x41, OpCode::new(0x41, 2, Addressing::IndirectX));
+    map.insert(0x51, OpCode::new(0x51, 2, Addressing::IndirectX));
 
     // INX
     map.insert(0xE8, OpCode::new(0xE8, 1, Addressing::Implied));
@@ -73,8 +93,25 @@ lazy_static! {
     map.insert(0xAC, OpCode::new(0xAC, 3, Addressing::Absolute));
     map.insert(0xBC, OpCode::new(0xBC, 3, Addressing::AbsoluteX));
 
+    // LSR
+    map.insert(0x4A, OpCode::new(0x4A, 1, Addressing::Implied));
+    map.insert(0x46, OpCode::new(0x46, 2, Addressing::ZeroPage));
+    map.insert(0x56, OpCode::new(0x56, 2, Addressing::ZeroPageX));
+    map.insert(0x4E, OpCode::new(0x4E, 3, Addressing::Absolute));
+    map.insert(0x5E, OpCode::new(0x5E, 3, Addressing::AbsoluteX));
+
     // NOP
     map.insert(0xEA, OpCode::new(0xEA, 1, Addressing::Implied));
+
+    // ORA
+    map.insert(0x09, OpCode::new(0x09, 2, Addressing::Immediate));
+    map.insert(0x05, OpCode::new(0x05, 2, Addressing::ZeroPage));
+    map.insert(0x15, OpCode::new(0x15, 2, Addressing::ZeroPageX));
+    map.insert(0x0D, OpCode::new(0x0D, 3, Addressing::Absolute));
+    map.insert(0x1D, OpCode::new(0x1D, 3, Addressing::AbsoluteX));
+    map.insert(0x19, OpCode::new(0x19, 3, Addressing::AbsoluteY));
+    map.insert(0x01, OpCode::new(0x01, 2, Addressing::IndirectX));
+    map.insert(0x11, OpCode::new(0x11, 2, Addressing::IndirectX));
 
     // SEC
     map.insert(0x38, OpCode::new(0x38, 1, Addressing::Implied));

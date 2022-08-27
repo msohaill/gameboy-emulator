@@ -47,6 +47,12 @@ impl CPU {
       self.increment_pc(1);
 
       match opcode.code {
+        // AND
+        0x29 | 0x25 | 0x35 | 0x2D | 0x3D | 0x39 | 0x21 | 0x31 => {
+          self.and(&opcode.mode);
+          self.increment_pc((opcode.len - 1) as u16);
+        }
+
         // BRK
         0x00 => return,
 
@@ -67,6 +73,12 @@ impl CPU {
 
         // DEY
         0x88 => self.dey(),
+
+        // EOR
+        0x49 | 0x45 | 0x55 | 0x4D | 0x5D | 0x59 | 0x41 | 0x51 => {
+          self.eor(&opcode.mode);
+          self.increment_pc((opcode.len - 1) as u16);
+        }
 
         // INX
         0xE8 => self.inx(),
@@ -92,8 +104,20 @@ impl CPU {
           self.increment_pc((opcode.len - 1) as u16);
         }
 
+        // LSR
+        0x4A | 0x46 | 0x56 | 0x4E | 0x5E => {
+          self.lsr(&opcode.mode);
+          self.increment_pc((opcode.len - 1) as u16);
+        }
+
         // NOP
         0xEA => continue,
+
+        // ORA
+        0x09 | 0x05 | 0x15 | 0x0D | 0x1D | 0x19 | 0x01 | 0x11 => {
+          self.ora(&opcode.mode);
+          self.increment_pc((opcode.len - 1) as u16);
+        }
 
         // SEC
         0x38 => self.sec(),
@@ -194,6 +218,13 @@ impl CPU {
   //   }
   // }
 
+  fn and(&mut self, mode: &Addressing) {
+    let byte = self.memory.read(self.get_operand_addr(mode));
+    self.registers.set(RegisterType::A, self.registers.get(RegisterType::A) & byte);
+
+    self.update_zero_negative(self.registers.get(RegisterType::A));
+  }
+
   fn clc(&mut self) {
     self.registers.set_flag(0, false);
   }
@@ -218,6 +249,13 @@ impl CPU {
   fn dey(&mut self) {
     self.registers.set(RegisterType::Y, self.registers.get(RegisterType::Y).wrapping_sub(1));
     self.update_zero_negative(self.registers.get(RegisterType::Y));
+  }
+
+  fn eor(&mut self, mode: &Addressing) {
+    let byte = self.memory.read(self.get_operand_addr(mode));
+    self.registers.set(RegisterType::A, self.registers.get(RegisterType::A) ^ byte);
+
+    self.update_zero_negative(self.registers.get(RegisterType::A));
   }
 
   fn inx(&mut self) {
@@ -249,6 +287,33 @@ impl CPU {
     self.registers.set(RegisterType::Y, val);
 
     self.update_zero_negative(val);
+  }
+
+  fn lsr(&mut self, mode: &Addressing) {
+    match mode {
+      Addressing::Implied => {
+        let data = self.registers.get(RegisterType::A);
+        self.registers.set_flag(0, data & 0b1 != 0);
+
+        self.registers.set(RegisterType::A, data >> 1);
+        self.update_zero_negative(self.registers.get(RegisterType::A));
+      }
+       _ => {
+        let addr = self.get_operand_addr(mode);
+        let data = self.memory.read(addr);
+        self.registers.set_flag(0, data & 0b1 != 0);
+
+        self.memory.write(addr, data >> 1);
+        self.update_zero_negative(self.memory.read(addr));
+      }
+    }
+  }
+
+  fn ora(&mut self, mode: &Addressing) {
+    let byte = self.memory.read(self.get_operand_addr(mode));
+    self.registers.set(RegisterType::A, self.registers.get(RegisterType::A) | byte);
+
+    self.update_zero_negative(self.registers.get(RegisterType::A));
   }
 
   fn sec(&mut self) {
