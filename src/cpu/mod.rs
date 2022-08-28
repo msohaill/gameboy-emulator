@@ -54,11 +54,35 @@ impl CPU {
         // ASL
         0x0A | 0x06 | 0x16 | 0x0E | 0x1E => self.asl(&opcode.mode),
 
+        // BCC
+        0x90 => self.branch(!self.registers.get_flag(&Flag::Carry)),
+
+        // BCC
+        0xB0 => self.branch(self.registers.get_flag(&Flag::Carry)),
+
+        // BEQ
+        0xF0 => self.branch(self.registers.get_flag(&Flag::Zero)),
+
         // BIT
         0x24 | 0x2C => self.bit(&opcode.mode),
 
+        // BMI
+        0x30 => self.branch(self.registers.get_flag(&Flag::Negative)),
+
+        // BNE
+        0xD0 => self.branch(!self.registers.get_flag(&Flag::Zero)),
+
+        // BPL
+        0x10 => self.branch(!self.registers.get_flag(&Flag::Negative)),
+
         // BRK
         0x00 => return,
+
+        // BVC
+        0x50 => self.branch(!self.registers.get_flag(&Flag::Overflow)),
+
+        // BCC
+        0x70 => self.branch(self.registers.get_flag(&Flag::Carry)),
 
         // CLC
         0x18 => self.registers.set_flag(&Flag::Carry, false),
@@ -101,6 +125,9 @@ impl CPU {
 
         // INY
         0xC8 => self.increment_reg(&Register::Y),
+
+        // JMP
+        0x4C | 0x6C => self.jmp(&opcode.mode),
 
         // LDA
         0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => self.load_reg(&opcode.mode, &Register::A),
@@ -177,7 +204,7 @@ impl CPU {
         self.registers.get_pc(),
       Addressing::ZeroPage =>
         self.memory.read(self.registers.get_pc()) as u16,
-      Addressing::Absolute =>
+      Addressing::Absolute | Addressing::AbsoluteIndirect =>
         self.memory.readu16(self.registers.get_pc()),
       Addressing::ZeroPageX =>
         self.memory.read(self.registers.get_pc()).wrapping_add(self.registers.get(&Register::X)) as u16,
@@ -255,6 +282,13 @@ impl CPU {
     self.registers.set_flag(&Flag::Negative, (data >> 7) & 0b1 != 0);
   }
 
+  fn branch(&mut self, condition: bool) {
+    if !condition { return };
+
+    let delta = self.memory.read(self.registers.get_pc()) as i8;
+    self.registers.set_pc(self.registers.get_pc().wrapping_add(1).wrapping_add(delta as u16));
+  }
+
   fn compare(&mut self, mode: &Addressing, reg: &Register) {
     let data = self.memory.read(self.get_operand_addr(mode));
     let comparable = self.registers.get(reg);
@@ -294,6 +328,28 @@ impl CPU {
   fn increment_reg(&mut self, reg: &Register) {
     self.registers.set(reg, self.registers.get(reg).wrapping_add(1));
     self.update_zero_negative(self.registers.get(reg));
+  }
+
+  fn jmp(&mut self, mode: &Addressing) {
+    match mode {
+      Addressing::Absolute => {
+        self.registers.set_pc(self.get_operand_addr(mode));
+      }
+      Addressing::AbsoluteIndirect => {
+        let addr = self.get_operand_addr(mode);
+        self.registers.set_pc(
+          if addr & 0x00FF == 0x00FF {
+            let lo = self.memory.read(addr) as u16;
+            let hi = self.memory.read(addr & 0xFF00) as u16;
+
+            (hi << 8) | lo
+          } else {
+            self.memory.readu16(addr)
+          }
+        )
+      }
+      _ => panic!("invalid mode for jump instructions"),
+    }
   }
 
   fn load_reg(&mut self, mode: &Addressing, reg: &Register) {

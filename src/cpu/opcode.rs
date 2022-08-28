@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use lazy_static::lazy_static;
 
 pub enum Addressing {
-  Immediate, ZeroPage, ZeroPageX, ZeroPageY, Absolute,
+  Immediate, ZeroPage, ZeroPageX, ZeroPageY, Absolute, AbsoluteIndirect,
   AbsoluteX, AbsoluteY, IndirectX, IndirectY, Implied,
 }
 
@@ -20,7 +20,8 @@ impl OpCode {
         Addressing::Implied => 1,
         Addressing::Immediate | Addressing::ZeroPage | Addressing::ZeroPageX |
         Addressing::ZeroPageY | Addressing::IndirectX | Addressing::IndirectY => 2,
-        Addressing::Absolute | Addressing::AbsoluteX | Addressing::AbsoluteY => 3,
+        Addressing::Absolute | Addressing::AbsoluteX | Addressing::AbsoluteY |
+        Addressing::AbsoluteIndirect => 3,
       },
       mode
     }
@@ -51,12 +52,33 @@ lazy_static! {
     // BCC
     map.insert(0x90, OpCode::new(0x90, Addressing::Immediate));
 
+    // BCS
+    map.insert(0xB0, OpCode::new(0xB0, Addressing::Immediate));
+
+    // BEQ
+    map.insert(0xF0, OpCode::new(0xF0, Addressing::Immediate));
+
     // BIT
     map.insert(0x24, OpCode::new(0x24, Addressing::ZeroPage));
     map.insert(0x2C, OpCode::new(0x2C, Addressing::Absolute));
 
+    // BMI
+    map.insert(0x30, OpCode::new(0x30, Addressing::Immediate));
+
+    // BNE
+    map.insert(0xD0, OpCode::new(0xD0, Addressing::Immediate));
+
+    // BPL
+    map.insert(0x10, OpCode::new(0x10, Addressing::Immediate));
+
     // BRK
     map.insert(0x00, OpCode::new(0x00, Addressing::Implied));
+
+    // BVC
+    map.insert(0x50, OpCode::new(0x50, Addressing::Immediate));
+
+    // BVS
+    map.insert(0x70, OpCode::new(0x70, Addressing::Immediate));
 
     // CLC
     map.insert(0x18, OpCode::new(0x18, Addressing::Implied));
