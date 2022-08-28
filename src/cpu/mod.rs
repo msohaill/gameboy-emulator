@@ -2,7 +2,7 @@ pub mod register;
 pub mod memory;
 pub mod opcode;
 
-use register::{Registers, RegisterType};
+use register::{Registers, Register, Flag};
 use memory::Memory;
 use opcode::{Addressing, OPCODE_MAP};
 
@@ -48,25 +48,40 @@ impl CPU {
 
       match opcode.code {
         // AND
-        0x29 | 0x25 | 0x35 | 0x2D | 0x3D | 0x39 | 0x21 | 0x31 => {
-          self.and(&opcode.mode);
-          self.increment_pc((opcode.len - 1) as u16);
-        }
+        0x29 | 0x25 | 0x35 | 0x2D | 0x3D | 0x39 | 0x21 | 0x31 => self.and(&opcode.mode),
+
+        // ASL
+        0x0A | 0x06 | 0x16 | 0x0E | 0x1E => self.asl(&opcode.mode),
+
+        // BIT
+        0x24 | 0x2C => self.bit(&opcode.mode),
 
         // BRK
         0x00 => return,
 
         // CLC
-        0x18 => self.clc(),
+        0x18 => self.registers.set_flag(&Flag::Carry, false),
 
         // CLD
-        0xD8 => self.cld(),
+        0xD8 => self.registers.set_flag(&Flag::Decimal, false),
 
         // CLI
-        0x58 => self.cli(),
+        0x58 => self.registers.set_flag(&Flag::InterruptDisable, false),
 
         // CLV
-        0xB8 => self.clv(),
+        0xB8 => self.registers.set_flag(&Flag::Overflow, false),
+
+        // CMP
+        0xC9 | 0xC5 | 0xD5 | 0xCD | 0xDD | 0xD9 | 0xC1 | 0xD1 => self.compare(&opcode.mode, &Register::A),
+
+        // CPX
+        0xE0 | 0xE4 | 0xEC => self.compare(&opcode.mode, &Register::X),
+
+        // CPY
+        0xC0 | 0xC4 | 0xCC => self.compare(&opcode.mode, &Register::Y),
+
+        // DEC
+        0xC6 | 0xD6 | 0xCE | 0xDE => self.dec(&opcode.mode),
 
         // DEX
         0xCA => self.dex(),
@@ -75,10 +90,10 @@ impl CPU {
         0x88 => self.dey(),
 
         // EOR
-        0x49 | 0x45 | 0x55 | 0x4D | 0x5D | 0x59 | 0x41 | 0x51 => {
-          self.eor(&opcode.mode);
-          self.increment_pc((opcode.len - 1) as u16);
-        }
+        0x49 | 0x45 | 0x55 | 0x4D | 0x5D | 0x59 | 0x41 | 0x51 => self.eor(&opcode.mode),
+
+        // INC
+        0xE6 | 0xF6 | 0xEE | 0xFE => self.inc(&opcode.mode),
 
         // INX
         0xE8 => self.inx(),
@@ -87,85 +102,63 @@ impl CPU {
         0xC8 => self.iny(),
 
         // LDA
-        0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => {
-          self.lda(&opcode.mode);
-          self.increment_pc((opcode.len - 1) as u16);
-        }
+        0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => self.lda(&opcode.mode),
 
         // LDX
-        0xA2 | 0xA6 | 0xB6 | 0xAE | 0xBE => {
-          self.ldx(&opcode.mode);
-          self.increment_pc((opcode.len - 1) as u16);
-        }
+        0xA2 | 0xA6 | 0xB6 | 0xAE | 0xBE => self.ldx(&opcode.mode),
 
         // LDY
-        0xA0 | 0xA4 | 0xB4 | 0xAC | 0xBC => {
-          self.ldy(&opcode.mode);
-          self.increment_pc((opcode.len - 1) as u16);
-        }
+        0xA0 | 0xA4 | 0xB4 | 0xAC | 0xBC => self.ldy(&opcode.mode),
 
         // LSR
-        0x4A | 0x46 | 0x56 | 0x4E | 0x5E => {
-          self.lsr(&opcode.mode);
-          self.increment_pc((opcode.len - 1) as u16);
-        }
+        0x4A | 0x46 | 0x56 | 0x4E | 0x5E => self.lsr(&opcode.mode),
 
         // NOP
-        0xEA => continue,
+        0xEA => (),
 
         // ORA
-        0x09 | 0x05 | 0x15 | 0x0D | 0x1D | 0x19 | 0x01 | 0x11 => {
-          self.ora(&opcode.mode);
-          self.increment_pc((opcode.len - 1) as u16);
-        }
+        0x09 | 0x05 | 0x15 | 0x0D | 0x1D | 0x19 | 0x01 | 0x11 => self.ora(&opcode.mode),
 
         // SEC
-        0x38 => self.sec(),
+        0x38 => self.registers.set_flag(&Flag::Carry, true),
 
         // SED
-        0xF8 => self.sed(),
+        0xF8 => self.registers.set_flag(&Flag::Decimal, true),
 
         // SEI
-        0x78 => self.sei(),
+        0x78 => self.registers.set_flag(&Flag::InterruptDisable, true),
 
         // STA
-        0x85 | 0x95 | 0x8D | 0x9D | 0x99 | 0x81 | 0x91 => {
-          self.sta(&opcode.mode);
-          self.increment_pc((opcode.len - 1) as u16);
-        }
+        0x85 | 0x95 | 0x8D | 0x9D | 0x99 | 0x81 | 0x91 => self.sta(&opcode.mode),
 
         // STX
-        0x86 | 0x96 | 0x8E => {
-          self.stx(&opcode.mode);
-          self.increment_pc((opcode.len - 1) as u16);
-        }
+        0x86 | 0x96 | 0x8E => self.stx(&opcode.mode),
 
         // STY
-        0x84 | 0x94 | 0x8C => {
-          self.sty(&opcode.mode);
-          self.increment_pc((opcode.len - 1) as u16);
-        }
+        0x84 | 0x94 | 0x8C => self.sty(&opcode.mode),
 
         // TAX
-        0xAA => self.tax(),
+        0xAA => self.reg_transfer(&Register::A, &Register::X),
 
         // TAY
-        0xA8 => self.tay(),
+        0xA8 => self.reg_transfer(&Register::A, &Register::Y),
 
         // TSX
-        0xBA => self.tsx(),
+        0xBA => self.reg_transfer(&Register::SP, &Register::X),
 
         // TXA
-        0x8A => self.txa(),
+        0x8A => self.reg_transfer(&Register::X, &Register::A),
 
         // TXS
-        0x9A => self.txs(),
+        0x9A => self.reg_transfer(&Register::X, &Register::SP),
 
         // TYA
-        0x98 => self.tya(),
+        0x98 => self.reg_transfer(&Register::Y, &Register::A),
 
         _ => todo!(""),
       }
+
+      self.increment_pc((opcode.len - 1) as u16);
     }
   }
 
@@ -178,20 +171,20 @@ impl CPU {
       Addressing::Absolute =>
         self.memory.readu16(self.registers.get_pc()),
       Addressing::ZeroPageX =>
-        self.memory.read(self.registers.get_pc()).wrapping_add(self.registers.get(RegisterType::X)) as u16,
+        self.memory.read(self.registers.get_pc()).wrapping_add(self.registers.get(&Register::X)) as u16,
       Addressing::ZeroPageY =>
-        self.memory.read(self.registers.get_pc()).wrapping_add(self.registers.get(RegisterType::Y)) as u16,
+        self.memory.read(self.registers.get_pc()).wrapping_add(self.registers.get(&Register::Y)) as u16,
       Addressing::AbsoluteX =>
-        self.memory.readu16(self.registers.get_pc()).wrapping_add(self.registers.get(RegisterType::X) as u16),
+        self.memory.readu16(self.registers.get_pc()).wrapping_add(self.registers.get(&Register::X) as u16),
       Addressing::AbsoluteY =>
-        self.memory.readu16(self.registers.get_pc()).wrapping_add(self.registers.get(RegisterType::Y) as u16),
+        self.memory.readu16(self.registers.get_pc()).wrapping_add(self.registers.get(&Register::Y) as u16),
       Addressing::IndirectX => {
-        let addr = self.memory.read(self.registers.get_pc()).wrapping_add(self.registers.get(RegisterType::X));
+        let addr = self.memory.read(self.registers.get_pc()).wrapping_add(self.registers.get(&Register::X));
         self.memory.readu16(addr as u16)
       }
       Addressing::IndirectY => {
         let addr = self.memory.read(self.registers.get_pc());
-        self.memory.readu16(addr as u16).wrapping_add(self.registers.get(RegisterType::Y) as u16)
+        self.memory.readu16(addr as u16).wrapping_add(self.registers.get(&Register::Y) as u16)
       }
       Addressing::Implied => panic!("Implied addressing doesn't yield an address."),
     }
@@ -199,15 +192,15 @@ impl CPU {
 
   fn update_zero_negative(&mut self, res: u8) {
     if res == 0 {
-      self.registers.set_flag(1, true);
+      self.registers.set_flag(&Flag::Zero, true);
     } else {
-      self.registers.set_flag(1, false);
+      self.registers.set_flag(&Flag::Zero, false);
     }
 
     if (res >> 7) & 0b1 != 0 {
-      self.registers.set_flag(7, true);
+      self.registers.set_flag(&Flag::Negative, true);
     } else {
-      self.registers.set_flag(7, false);
+      self.registers.set_flag(&Flag::Negative, false);
     }
   }
 
@@ -220,71 +213,107 @@ impl CPU {
 
   fn and(&mut self, mode: &Addressing) {
     let byte = self.memory.read(self.get_operand_addr(mode));
-    self.registers.set(RegisterType::A, self.registers.get(RegisterType::A) & byte);
+    self.registers.set(&Register::A, self.registers.get(&Register::A) & byte);
 
-    self.update_zero_negative(self.registers.get(RegisterType::A));
+    self.update_zero_negative(self.registers.get(&Register::A));
   }
 
-  fn clc(&mut self) {
-    self.registers.set_flag(0, false);
+  fn asl(&mut self, mode: &Addressing) {
+    match mode {
+      Addressing::Implied => {
+        let data = self.registers.get(&Register::A);
+        self.registers.set_flag(&Flag::Carry, (data >> 7) & 0b1 != 0);
+
+        self.registers.set(&Register::A, data << 1);
+        self.update_zero_negative(self.registers.get(&Register::A));
+      }
+       _ => {
+        let addr = self.get_operand_addr(mode);
+        let data = self.memory.read(addr);
+        self.registers.set_flag(&Flag::Carry, (data >> 7) & 0b1 != 0);
+
+        self.memory.write(addr, data << 1);
+        self.update_zero_negative(self.memory.read(addr));
+      }
+    }
   }
 
-  fn cld(&mut self) {
-    self.registers.set_flag(3, false);
+  fn bit(&mut self, mode: &Addressing) {
+    let data = self.memory.read(self.get_operand_addr(mode));
+
+    self.registers.set_flag(&Flag::Zero, data & self.registers.get(&Register::A) == 0);
+    self.registers.set_flag(&Flag::Overflow, (data >> 6) & 0b1 != 0);
+    self.registers.set_flag(&Flag::Negative, (data >> 7) & 0b1 != 0);
   }
 
-  fn cli(&mut self) {
-    self.registers.set_flag(2, false);
+  fn compare(&mut self, mode: &Addressing, reg: &Register) {
+    let data = self.memory.read(self.get_operand_addr(mode));
+    let comparable = self.registers.get(reg);
+
+    self.registers.set_flag(&Flag::Carry, data <= comparable);
+    self.update_zero_negative(comparable.wrapping_sub(data))
   }
 
-  fn clv(&mut self) {
-    self.registers.set_flag(6, false);
+  fn dec(&mut self, mode: &Addressing) {
+    let addr = self.get_operand_addr(mode);
+    let data = self.memory.read(addr);
+
+    self.memory.write(addr, data.wrapping_sub(1));
+    self.update_zero_negative(self.memory.read(addr));
   }
 
   fn dex(&mut self) {
-    self.registers.set(RegisterType::X, self.registers.get(RegisterType::X).wrapping_sub(1));
-    self.update_zero_negative(self.registers.get(RegisterType::X));
+    self.registers.set(&Register::X, self.registers.get(&Register::X).wrapping_sub(1));
+    self.update_zero_negative(self.registers.get(&Register::X));
   }
 
   fn dey(&mut self) {
-    self.registers.set(RegisterType::Y, self.registers.get(RegisterType::Y).wrapping_sub(1));
-    self.update_zero_negative(self.registers.get(RegisterType::Y));
+    self.registers.set(&Register::Y, self.registers.get(&Register::Y).wrapping_sub(1));
+    self.update_zero_negative(self.registers.get(&Register::Y));
   }
 
   fn eor(&mut self, mode: &Addressing) {
     let byte = self.memory.read(self.get_operand_addr(mode));
-    self.registers.set(RegisterType::A, self.registers.get(RegisterType::A) ^ byte);
+    self.registers.set(&Register::A, self.registers.get(&Register::A) ^ byte);
 
-    self.update_zero_negative(self.registers.get(RegisterType::A));
+    self.update_zero_negative(self.registers.get(&Register::A));
+  }
+
+  fn inc(&mut self, mode: &Addressing) {
+    let addr = self.get_operand_addr(mode);
+    let data = self.memory.read(addr);
+
+    self.memory.write(addr, data.wrapping_add(1));
+    self.update_zero_negative(self.memory.read(addr));
   }
 
   fn inx(&mut self) {
-    self.registers.set(RegisterType::X, self.registers.get(RegisterType::X).wrapping_add(1));
-    self.update_zero_negative(self.registers.get(RegisterType::X));
+    self.registers.set(&Register::X, self.registers.get(&Register::X).wrapping_add(1));
+    self.update_zero_negative(self.registers.get(&Register::X));
   }
 
   fn iny(&mut self) {
-    self.registers.set(RegisterType::Y, self.registers.get(RegisterType::Y).wrapping_add(1));
-    self.update_zero_negative(self.registers.get(RegisterType::Y));
+    self.registers.set(&Register::Y, self.registers.get(&Register::Y).wrapping_add(1));
+    self.update_zero_negative(self.registers.get(&Register::Y));
   }
 
   fn lda(&mut self, mode: &Addressing) {
     let val = self.memory.read(self.get_operand_addr(mode));
-    self.registers.set(RegisterType::A, val);
+    self.registers.set(&Register::A, val);
 
     self.update_zero_negative(val);
   }
 
   fn ldx(&mut self, mode: &Addressing) {
     let val = self.memory.read(self.get_operand_addr(mode));
-    self.registers.set(RegisterType::X, val);
+    self.registers.set(&Register::X, val);
 
     self.update_zero_negative(val);
   }
 
   fn ldy(&mut self, mode: &Addressing) {
     let val = self.memory.read(self.get_operand_addr(mode));
-    self.registers.set(RegisterType::Y, val);
+    self.registers.set(&Register::Y, val);
 
     self.update_zero_negative(val);
   }
@@ -292,16 +321,16 @@ impl CPU {
   fn lsr(&mut self, mode: &Addressing) {
     match mode {
       Addressing::Implied => {
-        let data = self.registers.get(RegisterType::A);
-        self.registers.set_flag(0, data & 0b1 != 0);
+        let data = self.registers.get(&Register::A);
+        self.registers.set_flag(&Flag::Carry, data & 0b1 != 0);
 
-        self.registers.set(RegisterType::A, data >> 1);
-        self.update_zero_negative(self.registers.get(RegisterType::A));
+        self.registers.set(&Register::A, data >> 1);
+        self.update_zero_negative(self.registers.get(&Register::A));
       }
        _ => {
         let addr = self.get_operand_addr(mode);
         let data = self.memory.read(addr);
-        self.registers.set_flag(0, data & 0b1 != 0);
+        self.registers.set_flag(&Flag::Carry, data & 0b1 != 0);
 
         self.memory.write(addr, data >> 1);
         self.update_zero_negative(self.memory.read(addr));
@@ -311,63 +340,25 @@ impl CPU {
 
   fn ora(&mut self, mode: &Addressing) {
     let byte = self.memory.read(self.get_operand_addr(mode));
-    self.registers.set(RegisterType::A, self.registers.get(RegisterType::A) | byte);
+    self.registers.set(&Register::A, self.registers.get(&Register::A) | byte);
 
-    self.update_zero_negative(self.registers.get(RegisterType::A));
-  }
-
-  fn sec(&mut self) {
-    self.registers.set_flag(0, true);
-  }
-
-  fn sed(&mut self) {
-    self.registers.set_flag(3, true);
-  }
-
-  fn sei(&mut self) {
-    self.registers.set_flag(2, true);
+    self.update_zero_negative(self.registers.get(&Register::A));
   }
 
   fn sta(&mut self, mode: &Addressing) {
-    self.memory.write(self.get_operand_addr(mode), self.registers.get(RegisterType::A));
+    self.memory.write(self.get_operand_addr(mode), self.registers.get(&Register::A));
   }
 
   fn stx(&mut self, mode: &Addressing) {
-    self.memory.write(self.get_operand_addr(mode), self.registers.get(RegisterType::X));
+    self.memory.write(self.get_operand_addr(mode), self.registers.get(&Register::X));
   }
 
   fn sty(&mut self, mode: &Addressing) {
-    self.memory.write(self.get_operand_addr(mode), self.registers.get(RegisterType::Y));
+    self.memory.write(self.get_operand_addr(mode), self.registers.get(&Register::Y));
   }
 
-  fn tax(&mut self) {
-    self.registers.set(RegisterType::X, self.registers.get(RegisterType::A));
-    self.update_zero_negative(self.registers.get(RegisterType::X));
+  fn reg_transfer(&mut self, from: &Register, to: &Register) {
+    self.registers.set(to, self.registers.get(from));
+    self.update_zero_negative(self.registers.get(to));
   }
-
-  fn tay(&mut self) {
-    self.registers.set(RegisterType::Y, self.registers.get(RegisterType::A));
-    self.update_zero_negative(self.registers.get(RegisterType::Y));
-  }
-
-  fn tsx(&mut self) {
-    self.registers.set(RegisterType::X, self.registers.get(RegisterType::SP));
-    self.update_zero_negative(self.registers.get(RegisterType::X));
-  }
-
-  fn txa(&mut self) {
-    self.registers.set(RegisterType::A, self.registers.get(RegisterType::X));
-    self.update_zero_negative(self.registers.get(RegisterType::A));
-  }
-
-  fn txs(&mut self) {
-    self.registers.set(RegisterType::SP, self.registers.get(RegisterType::X));
-    self.update_zero_negative(self.registers.get(RegisterType::SP));
-  }
-
-  fn tya(&mut self) {
-    self.registers.set(RegisterType::A, self.registers.get(RegisterType::Y));
-    self.update_zero_negative(self.registers.get(RegisterType::A));
-  }
-
 }

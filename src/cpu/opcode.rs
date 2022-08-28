@@ -32,6 +32,17 @@ lazy_static! {
     map.insert(0x21, OpCode::new(0x21, 2, Addressing::IndirectX));
     map.insert(0x31, OpCode::new(0x31, 2, Addressing::IndirectY));
 
+    // ASL
+    map.insert(0x0A, OpCode::new(0x0A, 1, Addressing::Implied));
+    map.insert(0x06, OpCode::new(0x06, 2, Addressing::ZeroPage));
+    map.insert(0x16, OpCode::new(0x16, 2, Addressing::ZeroPageX));
+    map.insert(0x0E, OpCode::new(0x0E, 3, Addressing::Absolute));
+    map.insert(0x1E, OpCode::new(0x1E, 3, Addressing::AbsoluteX));
+
+    // BIT
+    map.insert(0x24, OpCode::new(0x24, 2, Addressing::ZeroPage));
+    map.insert(0x2C, OpCode::new(0x2C, 3, Addressing::Absolute));
+
     // BRK
     map.insert(0x00, OpCode::new(0x00, 1, Addressing::Implied));
 
@@ -46,6 +57,32 @@ lazy_static! {
 
     // CLV
     map.insert(0xB8, OpCode::new(0xB8, 1, Addressing::Implied));
+
+    // CMP
+    map.insert(0xC9, OpCode::new(0xC9, 2, Addressing::Immediate));
+    map.insert(0xC5, OpCode::new(0xC5, 2, Addressing::ZeroPage));
+    map.insert(0xD5, OpCode::new(0xD5, 2, Addressing::ZeroPageX));
+    map.insert(0xCD, OpCode::new(0xCD, 3, Addressing::Absolute));
+    map.insert(0xDD, OpCode::new(0xDD, 3, Addressing::AbsoluteX));
+    map.insert(0xD9, OpCode::new(0xD9, 3, Addressing::AbsoluteY));
+    map.insert(0xC1, OpCode::new(0xC1, 2, Addressing::IndirectX));
+    map.insert(0xD1, OpCode::new(0xD1, 2, Addressing::IndirectY));
+
+    // CPX
+    map.insert(0xE0, OpCode::new(0xE0, 2, Addressing::Immediate));
+    map.insert(0xE4, OpCode::new(0xE4, 2, Addressing::ZeroPage));
+    map.insert(0xEC, OpCode::new(0xEc, 3, Addressing::Absolute));
+
+    // CPY
+    map.insert(0xC0, OpCode::new(0xC0, 2, Addressing::Immediate));
+    map.insert(0xC4, OpCode::new(0xC4, 2, Addressing::ZeroPage));
+    map.insert(0xCC, OpCode::new(0xCc, 3, Addressing::Absolute));
+
+    // DEC
+    map.insert(0xC6, OpCode::new(0xC6, 2, Addressing::ZeroPage));
+    map.insert(0xD6, OpCode::new(0xD6, 2, Addressing::ZeroPageX));
+    map.insert(0xCE, OpCode::new(0xCE, 3, Addressing::Absolute));
+    map.insert(0xDE, OpCode::new(0xDE, 3, Addressing::AbsoluteX));
 
     // DEX
     map.insert(0xCA, OpCode::new(0xCA, 1, Addressing::Implied));
@@ -62,6 +99,12 @@ lazy_static! {
     map.insert(0x59, OpCode::new(0x59, 3, Addressing::AbsoluteY));
     map.insert(0x41, OpCode::new(0x41, 2, Addressing::IndirectX));
     map.insert(0x51, OpCode::new(0x51, 2, Addressing::IndirectX));
+
+    // INC
+    map.insert(0xE6, OpCode::new(0xE6, 2, Addressing::ZeroPage));
+    map.insert(0xF6, OpCode::new(0xF6, 2, Addressing::ZeroPageX));
+    map.insert(0xEE, OpCode::new(0xEE, 3, Addressing::Absolute));
+    map.insert(0xFE, OpCode::new(0xFE, 3, Addressing::AbsoluteX));
 
     // INX
     map.insert(0xE8, OpCode::new(0xE8, 1, Addressing::Implied));
@@ -155,7 +198,7 @@ lazy_static! {
     map.insert(0x9A, OpCode::new(0x9A, 1, Addressing::Implied));
 
     // TYA
-    map.insert(0x98, OpCode::new(0x9A, 1, Addressing::Implied));
+    map.insert(0x98, OpCode::new(0x98, 1, Addressing::Implied));
 
     map
   };
