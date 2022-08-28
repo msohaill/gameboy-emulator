@@ -45,6 +45,7 @@ impl CPU {
         .get(&self.memory.read(self.registers.get_pc()))
         .expect("opcode not recognized.");
       self.increment_pc(1);
+      let current_pc = self.registers.get_pc();
 
       match opcode.code {
         // AND
@@ -119,6 +120,12 @@ impl CPU {
         // ORA
         0x09 | 0x05 | 0x15 | 0x0D | 0x1D | 0x19 | 0x01 | 0x11 => self.ora(&opcode.mode),
 
+        // ROL
+        0x2A | 0x26 | 0x36 | 0x2E | 0x3E => self.rol(&opcode.mode),
+
+        // ROR
+        0x6A | 0x66 | 0x76 | 0x6E | 0x7E => self.ror(&opcode.mode),
+
         // SEC
         0x38 => self.registers.set_flag(&Flag::Carry, true),
 
@@ -158,7 +165,9 @@ impl CPU {
         _ => todo!(""),
       }
 
-      self.increment_pc((opcode.len - 1) as u16);
+      if current_pc == self.registers.get_pc() {
+        self.increment_pc((opcode.len - 1) as u16);
+      }
     }
   }
 
@@ -319,6 +328,54 @@ impl CPU {
     self.registers.set(&Register::A, self.registers.get(&Register::A) | byte);
 
     self.update_zero_negative(self.registers.get(&Register::A));
+  }
+
+  fn rol(&mut self, mode: &Addressing) {
+    match mode {
+      Addressing::Implied => {
+        let data = self.registers.get(&Register::A);
+        let prev_carry = self.registers.get_flag(&Flag::Carry);
+
+        self.registers.set_flag(&Flag::Carry, (data >> 7) & 0b1 != 0);
+
+        self.registers.set(&Register::A, (data << 1) | if prev_carry { 1 } else { 0 });
+        self.update_zero_negative(self.registers.get(&Register::A));
+      }
+       _ => {
+        let addr = self.get_operand_addr(mode);
+        let data = self.memory.read(addr);
+        let prev_carry = self.registers.get_flag(&Flag::Carry);
+
+        self.registers.set_flag(&Flag::Carry, (data >> 7) & 0b1 != 0);
+
+        self.memory.write(addr, (data << 1) | if prev_carry { 1 } else { 0 });
+        self.update_zero_negative(self.memory.read(addr));
+      }
+    }
+  }
+
+  fn ror(&mut self, mode: &Addressing) {
+    match mode {
+      Addressing::Implied => {
+        let data = self.registers.get(&Register::A);
+        let prev_carry = self.registers.get_flag(&Flag::Carry);
+
+        self.registers.set_flag(&Flag::Carry, data & 0b1 != 0);
+
+        self.registers.set(&Register::A, (data >> 1) | if prev_carry { 1 << 7 } else { 0 });
+        self.update_zero_negative(self.registers.get(&Register::A));
+      }
+       _ => {
+        let addr = self.get_operand_addr(mode);
+        let data = self.memory.read(addr);
+        let prev_carry = self.registers.get_flag(&Flag::Carry);
+
+        self.registers.set_flag(&Flag::Carry, data & 0b1 != 0);
+
+        self.memory.write(addr, (data >> 1) | if prev_carry { 1 << 7 } else { 0 });
+        self.update_zero_negative(self.memory.read(addr));
+      }
+    }
   }
 
   fn store_reg(&mut self, mode: &Addressing, reg: &Register) {
