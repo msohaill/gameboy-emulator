@@ -84,10 +84,10 @@ impl CPU {
         0xC6 | 0xD6 | 0xCE | 0xDE => self.dec(&opcode.mode),
 
         // DEX
-        0xCA => self.dex(),
+        0xCA => self.decrement_reg(&Register::X),
 
         // DEY
-        0x88 => self.dey(),
+        0x88 => self.decrement_reg(&Register::Y),
 
         // EOR
         0x49 | 0x45 | 0x55 | 0x4D | 0x5D | 0x59 | 0x41 | 0x51 => self.eor(&opcode.mode),
@@ -96,19 +96,19 @@ impl CPU {
         0xE6 | 0xF6 | 0xEE | 0xFE => self.inc(&opcode.mode),
 
         // INX
-        0xE8 => self.inx(),
+        0xE8 => self.increment_reg(&Register::X),
 
         // INY
-        0xC8 => self.iny(),
+        0xC8 => self.increment_reg(&Register::Y),
 
         // LDA
-        0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => self.lda(&opcode.mode),
+        0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => self.load_reg(&opcode.mode, &Register::A),
 
         // LDX
-        0xA2 | 0xA6 | 0xB6 | 0xAE | 0xBE => self.ldx(&opcode.mode),
+        0xA2 | 0xA6 | 0xB6 | 0xAE | 0xBE => self.load_reg(&opcode.mode, &Register::X),
 
         // LDY
-        0xA0 | 0xA4 | 0xB4 | 0xAC | 0xBC => self.ldy(&opcode.mode),
+        0xA0 | 0xA4 | 0xB4 | 0xAC | 0xBC => self.load_reg(&opcode.mode, &Register::Y),
 
         // LSR
         0x4A | 0x46 | 0x56 | 0x4E | 0x5E => self.lsr(&opcode.mode),
@@ -129,31 +129,31 @@ impl CPU {
         0x78 => self.registers.set_flag(&Flag::InterruptDisable, true),
 
         // STA
-        0x85 | 0x95 | 0x8D | 0x9D | 0x99 | 0x81 | 0x91 => self.sta(&opcode.mode),
+        0x85 | 0x95 | 0x8D | 0x9D | 0x99 | 0x81 | 0x91 => self.store_reg(&opcode.mode, &Register::A),
 
         // STX
-        0x86 | 0x96 | 0x8E => self.stx(&opcode.mode),
+        0x86 | 0x96 | 0x8E => self.store_reg(&opcode.mode, &Register::X),
 
         // STY
-        0x84 | 0x94 | 0x8C => self.sty(&opcode.mode),
+        0x84 | 0x94 | 0x8C => self.store_reg(&opcode.mode, &Register::Y),
 
         // TAX
-        0xAA => self.reg_transfer(&Register::A, &Register::X),
+        0xAA => self.transfer_reg(&Register::A, &Register::X),
 
         // TAY
-        0xA8 => self.reg_transfer(&Register::A, &Register::Y),
+        0xA8 => self.transfer_reg(&Register::A, &Register::Y),
 
         // TSX
-        0xBA => self.reg_transfer(&Register::SP, &Register::X),
+        0xBA => self.transfer_reg(&Register::SP, &Register::X),
 
         // TXA
-        0x8A => self.reg_transfer(&Register::X, &Register::A),
+        0x8A => self.transfer_reg(&Register::X, &Register::A),
 
         // TXS
-        0x9A => self.reg_transfer(&Register::X, &Register::SP),
+        0x9A => self.transfer_reg(&Register::X, &Register::SP),
 
         // TYA
-        0x98 => self.reg_transfer(&Register::Y, &Register::A),
+        0x98 => self.transfer_reg(&Register::Y, &Register::A),
 
         _ => todo!(""),
       }
@@ -262,14 +262,9 @@ impl CPU {
     self.update_zero_negative(self.memory.read(addr));
   }
 
-  fn dex(&mut self) {
-    self.registers.set(&Register::X, self.registers.get(&Register::X).wrapping_sub(1));
-    self.update_zero_negative(self.registers.get(&Register::X));
-  }
-
-  fn dey(&mut self) {
-    self.registers.set(&Register::Y, self.registers.get(&Register::Y).wrapping_sub(1));
-    self.update_zero_negative(self.registers.get(&Register::Y));
+  fn decrement_reg(&mut self, reg: &Register) {
+    self.registers.set(reg, self.registers.get(reg).wrapping_sub(1));
+    self.update_zero_negative(self.registers.get(reg));
   }
 
   fn eor(&mut self, mode: &Addressing) {
@@ -287,33 +282,14 @@ impl CPU {
     self.update_zero_negative(self.memory.read(addr));
   }
 
-  fn inx(&mut self) {
-    self.registers.set(&Register::X, self.registers.get(&Register::X).wrapping_add(1));
-    self.update_zero_negative(self.registers.get(&Register::X));
+  fn increment_reg(&mut self, reg: &Register) {
+    self.registers.set(reg, self.registers.get(reg).wrapping_add(1));
+    self.update_zero_negative(self.registers.get(reg));
   }
 
-  fn iny(&mut self) {
-    self.registers.set(&Register::Y, self.registers.get(&Register::Y).wrapping_add(1));
-    self.update_zero_negative(self.registers.get(&Register::Y));
-  }
-
-  fn lda(&mut self, mode: &Addressing) {
+  fn load_reg(&mut self, mode: &Addressing, reg: &Register) {
     let val = self.memory.read(self.get_operand_addr(mode));
-    self.registers.set(&Register::A, val);
-
-    self.update_zero_negative(val);
-  }
-
-  fn ldx(&mut self, mode: &Addressing) {
-    let val = self.memory.read(self.get_operand_addr(mode));
-    self.registers.set(&Register::X, val);
-
-    self.update_zero_negative(val);
-  }
-
-  fn ldy(&mut self, mode: &Addressing) {
-    let val = self.memory.read(self.get_operand_addr(mode));
-    self.registers.set(&Register::Y, val);
+    self.registers.set(reg, val);
 
     self.update_zero_negative(val);
   }
@@ -345,19 +321,11 @@ impl CPU {
     self.update_zero_negative(self.registers.get(&Register::A));
   }
 
-  fn sta(&mut self, mode: &Addressing) {
-    self.memory.write(self.get_operand_addr(mode), self.registers.get(&Register::A));
+  fn store_reg(&mut self, mode: &Addressing, reg: &Register) {
+    self.memory.write(self.get_operand_addr(mode), self.registers.get(reg));
   }
 
-  fn stx(&mut self, mode: &Addressing) {
-    self.memory.write(self.get_operand_addr(mode), self.registers.get(&Register::X));
-  }
-
-  fn sty(&mut self, mode: &Addressing) {
-    self.memory.write(self.get_operand_addr(mode), self.registers.get(&Register::Y));
-  }
-
-  fn reg_transfer(&mut self, from: &Register, to: &Register) {
+  fn transfer_reg(&mut self, from: &Register, to: &Register) {
     self.registers.set(to, self.registers.get(from));
     self.update_zero_negative(self.registers.get(to));
   }

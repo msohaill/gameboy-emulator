@@ -156,6 +156,13 @@ lazy_static! {
     map.insert(0x01, OpCode::new(0x01, 2, Addressing::IndirectX));
     map.insert(0x11, OpCode::new(0x11, 2, Addressing::IndirectX));
 
+    // ROL
+    map.insert(0x2A, OpCode::new(0x2A, 1, Addressing::Implied));
+    map.insert(0x26, OpCode::new(0x26, 2, Addressing::ZeroPage));
+    map.insert(0x36, OpCode::new(0x36, 2, Addressing::ZeroPageX));
+    map.insert(0x2E, OpCode::new(0x2E, 3, Addressing::Absolute));
+    map.insert(0x3E, OpCode::new(0x3E, 3, Addressing::AbsoluteX));
+
     // SEC
     map.insert(0x38, OpCode::new(0x38, 1, Addressing::Implied));
 
