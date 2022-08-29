@@ -32,6 +32,16 @@ lazy_static! {
   pub static ref OPCODE_MAP : HashMap<u8, OpCode> = {
     let mut map = HashMap::new();
 
+    // ADC
+    map.insert(0x69, OpCode::new(0x69, Addressing::Immediate));
+    map.insert(0x65, OpCode::new(0x65, Addressing::ZeroPage));
+    map.insert(0x75, OpCode::new(0x75, Addressing::ZeroPageX));
+    map.insert(0x6D, OpCode::new(0x6D, Addressing::Absolute));
+    map.insert(0x7D, OpCode::new(0x7D, Addressing::AbsoluteX));
+    map.insert(0x79, OpCode::new(0x79, Addressing::AbsoluteY));
+    map.insert(0x61, OpCode::new(0x61, Addressing::IndirectX));
+    map.insert(0x71, OpCode::new(0x71, Addressing::IndirectY));
+
     // AND
     map.insert(0x29, OpCode::new(0x29, Addressing::Immediate));
     map.insert(0x25, OpCode::new(0x25, Addressing::ZeroPage));
@@ -146,6 +156,13 @@ lazy_static! {
     // INY
     map.insert(0xC8, OpCode::new(0xC8, Addressing::Implied));
 
+    // JMP
+    map.insert(0x4C, OpCode::new(0x4C, Addressing::Absolute));
+    map.insert(0x6C, OpCode::new(0x6C, Addressing::AbsoluteIndirect));
+
+    // JSR
+    map.insert(0x20, OpCode::new(0x20, Addressing::Absolute));
+
     // LDA
     map.insert(0xA9, OpCode::new(0xA9, Addressing::Immediate));
     map.insert(0xA5, OpCode::new(0xA5, Addressing::ZeroPage));
@@ -190,6 +207,18 @@ lazy_static! {
     map.insert(0x01, OpCode::new(0x01, Addressing::IndirectX));
     map.insert(0x11, OpCode::new(0x11, Addressing::IndirectX));
 
+    // PHA
+    map.insert(0x48, OpCode::new(0x48, Addressing::Implied));
+
+    // PHP
+    map.insert(0x08, OpCode::new(0x08, Addressing::Implied));
+
+    // PLA
+    map.insert(0x68, OpCode::new(0x68, Addressing::Implied));
+
+    // PLP
+    map.insert(0x28, OpCode::new(0x28, Addressing::Implied));
+
     // ROL
     map.insert(0x2A, OpCode::new(0x2A, Addressing::Implied));
     map.insert(0x26, OpCode::new(0x26, Addressing::ZeroPage));
@@ -203,6 +232,22 @@ lazy_static! {
     map.insert(0x76, OpCode::new(0x36, Addressing::ZeroPageX));
     map.insert(0x6E, OpCode::new(0x2E, Addressing::Absolute));
     map.insert(0x7E, OpCode::new(0x3E, Addressing::AbsoluteX));
+
+    // RTI
+    map.insert(0x40, OpCode::new(0x40, Addressing::Implied));
+
+    // RTS
+    map.insert(0x60, OpCode::new(0x60, Addressing::Implied));
+
+    // SBC
+    map.insert(0xE9, OpCode::new(0x69, Addressing::Immediate));
+    map.insert(0xE5, OpCode::new(0x65, Addressing::ZeroPage));
+    map.insert(0xF5, OpCode::new(0x75, Addressing::ZeroPageX));
+    map.insert(0xED, OpCode::new(0x6D, Addressing::Absolute));
+    map.insert(0xFD, OpCode::new(0x7D, Addressing::AbsoluteX));
+    map.insert(0xF9, OpCode::new(0x79, Addressing::AbsoluteY));
+    map.insert(0xE1, OpCode::new(0x61, Addressing::IndirectX));
+    map.insert(0xF1, OpCode::new(0x71, Addressing::IndirectY));
 
     // SEC
     map.insert(0x38, OpCode::new(0x38, Addressing::Implied));

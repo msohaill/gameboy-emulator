@@ -22,9 +22,9 @@ impl Registers {
       accumulator: 0,
       x_index: 0,
       y_index: 0,
-      program_status: 0,
+      program_status: 0b0010_0100,
       program_counter: 0,
-      stack_pointer: 0,
+      stack_pointer: 0x1E,
     }
   }
 

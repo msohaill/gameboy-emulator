@@ -12,15 +12,13 @@ pub struct CPU {
 }
 
 impl CPU {
+  const STACK_START: u16 = 0x0100;
+
   pub fn new() -> Self {
     CPU {
       registers: Registers::new(),
       memory: Memory::new(),
     }
-  }
-
-  fn increment_pc(&mut self, i: u16) {
-    self.registers.set_pc(self.registers.get_pc().wrapping_add(i));
   }
 
   fn reset(&mut self) {
@@ -39,6 +37,43 @@ impl CPU {
     self.run();
   }
 
+  fn stack_push(&mut self, data: u8) {
+    if self.registers.get(&Register::SP) == 0 {
+      panic!("Attempted to store beyone stack capacity.");
+    }
+
+    self.memory.write(CPU::STACK_START.wrapping_add(self.registers.get(&Register::SP) as u16), data);
+    self.registers.set(&Register::SP, self.registers.get(&Register::SP).wrapping_sub(1));
+  }
+
+  fn stack_pop(&mut self) -> u8 {
+    if self.registers.get(&Register::SP) == 0x1E {
+      panic!("Attempted to pop empty stack");
+    }
+
+    self.registers.set(&Register::SP, self.registers.get(&Register::SP).wrapping_add(1));
+    self.memory.read(CPU::STACK_START.wrapping_add(self.registers.get(&Register::SP) as u16))
+  }
+
+  fn stack_pushu16(&mut self, data: u16) {
+    let hi = (data >> 8) as u8;
+    let lo = (data & 0xFF) as u8;
+
+    self.stack_push(hi);
+    self.stack_push(lo);
+  }
+
+  fn stack_popu16(&mut self) -> u16 {
+    let lo = self.stack_pop() as u16;
+    let hi = self.stack_pop() as u16;
+
+    (hi << 8) | lo
+  }
+
+  fn increment_pc(&mut self, i: u16) {
+    self.registers.set_pc(self.registers.get_pc().wrapping_add(i));
+  }
+
   fn run(&mut self) {
     loop {
       let opcode = OPCODE_MAP
@@ -48,6 +83,9 @@ impl CPU {
       let current_pc = self.registers.get_pc();
 
       match opcode.code {
+        // ADC
+        0x69 | 0x65 | 0x75 | 0x6D | 0x7D | 0x79 | 0x61 | 0x71 => self.adc(&opcode.mode),
+
         // AND
         0x29 | 0x25 | 0x35 | 0x2D | 0x3D | 0x39 | 0x21 | 0x31 => self.and(&opcode.mode),
 
@@ -129,6 +167,9 @@ impl CPU {
         // JMP
         0x4C | 0x6C => self.jmp(&opcode.mode),
 
+        // JSR
+        0x20 => self.jsr(),
+
         // LDA
         0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => self.load_reg(&opcode.mode, &Register::A),
 
@@ -147,11 +188,32 @@ impl CPU {
         // ORA
         0x09 | 0x05 | 0x15 | 0x0D | 0x1D | 0x19 | 0x01 | 0x11 => self.ora(&opcode.mode),
 
+        // PHA
+        0x48 => self.stack_push(self.registers.get(&Register::A)),
+
+        // PHP
+        0x08 => self.php(),
+
+        // PLA
+        0x68 => self.pla(),
+
+        // PLP
+        0x28 => self.plp(),
+
         // ROL
         0x2A | 0x26 | 0x36 | 0x2E | 0x3E => self.rol(&opcode.mode),
 
         // ROR
         0x6A | 0x66 | 0x76 | 0x6E | 0x7E => self.ror(&opcode.mode),
+
+        // RTI
+        0x40 => self.rti(),
+
+        // RTS
+        0x60 => self.rts(),
+
+        // SBC
+        0xE9 | 0xE5 | 0xF5 | 0xED | 0xFD | 0xF9 | 0xE1 | 0xF1 => self.sbc(&opcode.mode),
 
         // SEC
         0x38 => self.registers.set_flag(&Flag::Carry, true),
@@ -240,12 +302,23 @@ impl CPU {
     }
   }
 
-  // fn check_overflow(&mut self, x: u8, y: u8) {
-  //   match x.checked_add(y) {
-  //     None => self.registers.set_flag(6, false),
-  //     Some(_) => self.registers.set_flag(6, true),
-  //   }
-  // }
+  fn adc(&mut self, mode: &Addressing) {
+    let val = self.memory.read(self.get_operand_addr(mode));
+
+    let raw_res = (self.registers.get(&Register::A) as u16)
+      .wrapping_add( if self.registers.get_flag(&Flag::Carry) { 1 } else { 0 })
+      .wrapping_add(val as u16);
+
+    let res = raw_res as u8;
+
+    self.registers.set_flag(&Flag::Carry, (res as u16) < raw_res);
+    self.registers.set_flag(&Flag::Overflow,
+      (res ^ self.registers.get(&Register::A)) & (res ^ val) & 0x80 != 0
+    );
+
+    self.registers.set(&Register::A, res);
+    self.update_zero_negative(self.registers.get(&Register::A));
+  }
 
   fn and(&mut self, mode: &Addressing) {
     let byte = self.memory.read(self.get_operand_addr(mode));
@@ -348,8 +421,13 @@ impl CPU {
           }
         )
       }
-      _ => panic!("invalid mode for jump instructions"),
+      _ => panic!("Invalid mode for jump instructions"),
     }
+  }
+
+  fn jsr(&mut self) {
+    self.stack_pushu16(self.registers.get_pc() + 1);
+    self.registers.set_pc(self.get_operand_addr(&Addressing::Absolute));
   }
 
   fn load_reg(&mut self, mode: &Addressing, reg: &Register) {
@@ -384,6 +462,23 @@ impl CPU {
     self.registers.set(&Register::A, self.registers.get(&Register::A) | byte);
 
     self.update_zero_negative(self.registers.get(&Register::A));
+  }
+
+  fn php(&mut self) {
+    let status = self.registers.get(&Register::P) | (0b11 << 5);
+    self.stack_push(status);
+  }
+
+  fn pla(&mut self) {
+    let val = self.stack_pop();
+    self.registers.set(&Register::A, val);
+
+    self.update_zero_negative(val);
+  }
+
+  fn plp(&mut self) {
+    let status = (self.stack_pop() | (1 << 5)) & !(1 << 4);
+    self.registers.set(&Register::P, status);
   }
 
   fn rol(&mut self, mode: &Addressing) {
@@ -432,6 +527,37 @@ impl CPU {
         self.update_zero_negative(self.memory.read(addr));
       }
     }
+  }
+
+  fn rti(&mut self) {
+    let status = self.stack_pop();
+    self.registers.set(&Register::P, (status | (1 << 5)) & !(1 << 4));
+
+    let pc = self.stack_popu16();
+    self.registers.set_pc(pc);
+  }
+
+  fn rts(&mut self) {
+    let pc = self.stack_popu16().wrapping_add(1);
+    self.registers.set_pc(pc);
+  }
+
+  fn sbc(&mut self, mode: &Addressing) {
+    let val = self.memory.read(self.get_operand_addr(mode)).wrapping_neg().wrapping_sub(1);
+
+    let raw_res = (self.registers.get(&Register::A) as u16)
+      .wrapping_add( if self.registers.get_flag(&Flag::Carry) { 1 } else { 0 })
+      .wrapping_add(val as u16);
+
+    let res = raw_res as u8;
+
+    self.registers.set_flag(&Flag::Carry, (res as u16) < raw_res);
+    self.registers.set_flag(&Flag::Overflow,
+      (res ^ self.registers.get(&Register::A)) & (res ^ val) & 0x80 != 0
+    );
+
+    self.registers.set(&Register::A, res);
+    self.update_zero_negative(self.registers.get(&Register::A));
   }
 
   fn store_reg(&mut self, mode: &Addressing, reg: &Register) {
