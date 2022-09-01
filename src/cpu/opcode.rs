@@ -227,11 +227,11 @@ lazy_static! {
     map.insert(0x3E, OpCode::new(0x3E, Addressing::AbsoluteX));
 
     // ROR
-    map.insert(0x6A, OpCode::new(0x2A, Addressing::Implied));
-    map.insert(0x66, OpCode::new(0x26, Addressing::ZeroPage));
-    map.insert(0x76, OpCode::new(0x36, Addressing::ZeroPageX));
-    map.insert(0x6E, OpCode::new(0x2E, Addressing::Absolute));
-    map.insert(0x7E, OpCode::new(0x3E, Addressing::AbsoluteX));
+    map.insert(0x6A, OpCode::new(0x6A, Addressing::Implied));
+    map.insert(0x66, OpCode::new(0x66, Addressing::ZeroPage));
+    map.insert(0x76, OpCode::new(0x76, Addressing::ZeroPageX));
+    map.insert(0x6E, OpCode::new(0x6E, Addressing::Absolute));
+    map.insert(0x7E, OpCode::new(0x7E, Addressing::AbsoluteX));
 
     // RTI
     map.insert(0x40, OpCode::new(0x40, Addressing::Implied));
@@ -240,14 +240,14 @@ lazy_static! {
     map.insert(0x60, OpCode::new(0x60, Addressing::Implied));
 
     // SBC
-    map.insert(0xE9, OpCode::new(0x69, Addressing::Immediate));
-    map.insert(0xE5, OpCode::new(0x65, Addressing::ZeroPage));
-    map.insert(0xF5, OpCode::new(0x75, Addressing::ZeroPageX));
-    map.insert(0xED, OpCode::new(0x6D, Addressing::Absolute));
-    map.insert(0xFD, OpCode::new(0x7D, Addressing::AbsoluteX));
-    map.insert(0xF9, OpCode::new(0x79, Addressing::AbsoluteY));
-    map.insert(0xE1, OpCode::new(0x61, Addressing::IndirectX));
-    map.insert(0xF1, OpCode::new(0x71, Addressing::IndirectY));
+    map.insert(0xE9, OpCode::new(0xE9, Addressing::Immediate));
+    map.insert(0xE5, OpCode::new(0xE5, Addressing::ZeroPage));
+    map.insert(0xF5, OpCode::new(0xF5, Addressing::ZeroPageX));
+    map.insert(0xED, OpCode::new(0xED, Addressing::Absolute));
+    map.insert(0xFD, OpCode::new(0xFD, Addressing::AbsoluteX));
+    map.insert(0xF9, OpCode::new(0xF9, Addressing::AbsoluteY));
+    map.insert(0xE1, OpCode::new(0xE1, Addressing::IndirectX));
+    map.insert(0xF1, OpCode::new(0xF1, Addressing::IndirectY));
 
     // SEC
     map.insert(0x38, OpCode::new(0x38, Addressing::Implied));
@@ -264,6 +264,8 @@ lazy_static! {
     map.insert(0x8D, OpCode::new(0x8D, Addressing::Absolute));
     map.insert(0x9D, OpCode::new(0x9D, Addressing::AbsoluteX));
     map.insert(0x99, OpCode::new(0x99, Addressing::AbsoluteY));
+    map.insert(0x81, OpCode::new(0x81, Addressing::IndirectX));
+    map.insert(0x91, OpCode::new(0x91, Addressing::IndirectY));
 
     // STX
     map.insert(0x86, OpCode::new(0x86, Addressing::ZeroPage));

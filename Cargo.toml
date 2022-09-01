@@ -1,5 +1,5 @@
 [package]
-name = "gameboy-emulator"
+name = "nes-emulator"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,3 +7,5 @@ edition = "2021"
 
 [dependencies]
 lazy_static = "1.4.0"
+sdl2 = "^0.35.2"
+rand = "^0.8.5"

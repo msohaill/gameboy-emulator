@@ -27,14 +27,17 @@ impl CPU {
   }
 
   fn load(&mut self, program: Vec<u8>) {
-    self.memory.load(0x8000, program);
-    self.memory.writeu16(0xFFFC, 0x8000);
+    self.memory.load(0x600, program);
+    self.memory.writeu16(0xFFFC, 0x600);
   }
 
-  pub fn start(&mut self, program: Vec<u8>) {
+  pub fn start<F>(&mut self, program: Vec<u8>, callback: F)
+  where
+    F: FnMut(&mut CPU),
+  {
     self.load(program);
     self.reset();
-    self.run();
+    self.run(callback);
   }
 
   fn stack_push(&mut self, data: u8) {
@@ -74,8 +77,20 @@ impl CPU {
     self.registers.set_pc(self.registers.get_pc().wrapping_add(i));
   }
 
-  fn run(&mut self) {
+  fn run<F>(&mut self, callback: F)
+  where
+    F: FnMut(&mut CPU),
+  {
+    self.callback_run(callback);
+  }
+
+  fn callback_run<F>(&mut self, mut callback: F)
+  where
+    F: FnMut(&mut CPU),
+  {
     loop {
+      callback(self);
+
       let opcode = OPCODE_MAP
         .get(&self.memory.read(self.registers.get_pc()))
         .expect("opcode not recognized.");
@@ -95,7 +110,7 @@ impl CPU {
         // BCC
         0x90 => self.branch(!self.registers.get_flag(&Flag::Carry)),
 
-        // BCC
+        // BCS
         0xB0 => self.branch(self.registers.get_flag(&Flag::Carry)),
 
         // BEQ
