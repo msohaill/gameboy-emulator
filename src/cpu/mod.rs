@@ -2,6 +2,8 @@ pub mod register;
 pub mod opcode;
 
 use register::{Registers, Register, Flag};
+use super::memory::rom::ROM;
+
 use super::memory::Memory;
 use opcode::{Addressing, OPCODE_MAP};
 
@@ -13,29 +15,23 @@ pub struct CPU {
 impl CPU {
   const STACK_START: u16 = 0x0100;
 
-  pub fn new() -> Self {
+  pub fn new(cartridge: ROM) -> Self {
     CPU {
       registers: Registers::new(),
-      memory: Memory::new(),
+      memory: Memory::new(cartridge),
     }
   }
 
   fn reset(&mut self) {
     self.registers = Registers::new();
     self.registers.set_pc(self.memory.readu16(0xFFFC)); // Check after
-    self.registers.set_pc(0x0600);
+    // self.registers.set_pc(0x0600);
   }
 
-  fn load(&mut self, program: Vec<u8>) {
-    self.memory.load(0x600, program);
-    self.memory.writeu16(0xFFFC, 0x600);
-  }
-
-  pub fn start<F>(&mut self, program: Vec<u8>, callback: F)
+  pub fn start<F>(&mut self, callback: F)
   where
     F: FnMut(&mut CPU),
   {
-    self.load(program);
     self.reset();
     self.run(callback);
   }

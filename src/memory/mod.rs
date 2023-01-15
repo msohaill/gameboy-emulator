@@ -1,15 +1,17 @@
 pub mod bus;
+pub mod rom;
 
 use bus::Bus;
+use rom::ROM;
 
 pub struct Memory {
   bus: Bus,
 }
 
 impl Memory {
-  pub fn new() -> Self {
+  pub fn new(cartridge: ROM) -> Self {
     Memory {
-      bus: Bus::new(),
+      bus: Bus::new(cartridge),
     }
   }
 
@@ -27,12 +29,5 @@ impl Memory {
 
   pub fn writeu16(&mut self, addr: u16, data: u16) {
     self.bus.writeu16(addr, data)
-  }
-
-  pub fn load(&mut self, start: u16, program: Vec<u8>) {
-    for i in 0..(program.len() as u16) {
-      self.write(start + i, program[i as usize]);
-    }
-    // self.arr[start .. (start + program.len())].copy_from_slice(&program[..]);
   }
 }

@@ -1,5 +1,8 @@
+use super::rom::ROM;
+
 pub struct Bus {
   vram: [u8; 2048],
+  rom: ROM,
 }
 
 impl Bus {
@@ -7,18 +10,25 @@ impl Bus {
   const RAM_END: u16 = 0x1FFF;
   const PPU: u16 = 0x2000;
   const PPU_END: u16 = 0x3FFF;
+  const ROM: u16 = 0x8000;
+  const ROM_END: u16 = 0xFFFF;
 
-
-  pub fn new() -> Self {
+  pub fn new(rom: ROM) -> Self {
     Bus {
       vram: [0; 2048],
+      rom,
     }
   }
 
-  pub fn read(&self, addr: u16) -> u8 {
+  pub fn read(&self, mut addr: u16) -> u8 {
     match addr {
       Bus::RAM ..= Bus::RAM_END => self.vram[(addr & ((1 << 11) - 1)) as usize],
       Bus::PPU ..= Bus::PPU_END => todo!("PPU Later"),
+      Bus::ROM..=Bus::ROM_END => {
+        addr -= Bus::ROM;
+        if self.rom.prg.len() == 0x4000 && addr >= 0x4000 { addr = addr % 0x4000 }
+        self.rom.prg[addr as usize]
+      }
       _ => {
         println!("Ignoring read: {:#0X}", addr);
         0
@@ -36,6 +46,7 @@ impl Bus {
     match addr {
       Bus::RAM ..= Bus::RAM_END => self.vram[(addr & ((1 << 11) - 1)) as usize] = data,
       Bus::PPU ..= Bus::PPU_END => todo!("PPU Later"),
+      Bus::ROM..=Bus::ROM_END => panic!("Attempting to write to ROM."),
       _ => {
         println!("Ignoring write: {:#0X}", addr);
         ()
