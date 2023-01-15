@@ -1,9 +1,8 @@
 pub mod register;
-pub mod memory;
 pub mod opcode;
 
 use register::{Registers, Register, Flag};
-use memory::Memory;
+use super::memory::Memory;
 use opcode::{Addressing, OPCODE_MAP};
 
 pub struct CPU {
@@ -23,7 +22,8 @@ impl CPU {
 
   fn reset(&mut self) {
     self.registers = Registers::new();
-    self.registers.set_pc(self.memory.readu16(0xFFFC));
+    self.registers.set_pc(self.memory.readu16(0xFFFC)); // Check after
+    self.registers.set_pc(0x0600);
   }
 
   fn load(&mut self, program: Vec<u8>) {
@@ -77,14 +77,7 @@ impl CPU {
     self.registers.set_pc(self.registers.get_pc().wrapping_add(i));
   }
 
-  fn run<F>(&mut self, callback: F)
-  where
-    F: FnMut(&mut CPU),
-  {
-    self.callback_run(callback);
-  }
-
-  fn callback_run<F>(&mut self, mut callback: F)
+  fn run<F>(&mut self, mut callback: F)
   where
     F: FnMut(&mut CPU),
   {

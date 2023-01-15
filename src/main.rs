@@ -6,6 +6,7 @@ use sdl2::pixels::PixelFormatEnum;
 
 use rand::Rng;
 
+pub mod memory;
 pub mod cpu;
 use cpu::CPU;
 use sdl2::render::TextureAccess;
@@ -35,8 +36,7 @@ fn main() {
     ];
 
     let sdl_context = sdl2::init().unwrap();
-    let video_subsytem = sdl_context.video().unwrap();
-    let window = video_subsytem
+    let window = sdl_context.video().unwrap()
         .window("Snake Game", (32 * 10) as u32, (32 * 10) as u32)
         .position_centered()
         .build().unwrap();
