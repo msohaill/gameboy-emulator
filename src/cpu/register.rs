@@ -24,7 +24,7 @@ impl Registers {
       y_index: 0,
       program_status: 0b0010_0100,
       program_counter: 0,
-      stack_pointer: 0x1E,
+      stack_pointer: 0xFD,
     }
   }
 

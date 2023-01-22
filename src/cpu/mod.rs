@@ -1,11 +1,9 @@
 pub mod register;
-pub mod opcode;
+pub mod instruction;
 
-use register::{Registers, Register, Flag};
-use super::memory::rom::ROM;
-
-use super::memory::Memory;
-use opcode::{Addressing, OPCODE_MAP};
+use super::memory::{Memory, rom::ROM};
+use instruction::{Addressing, Instruction, OpCode};
+use register::{Flag, Register, Registers};
 
 pub struct CPU {
   pub registers: Registers,
@@ -26,6 +24,7 @@ impl CPU {
     self.registers = Registers::new();
     self.registers.set_pc(self.memory.readu16(0xFFFC)); // Check after
     // self.registers.set_pc(0x0600);
+    self.registers.set_pc(0xC000);
   }
 
   pub fn start<F>(&mut self, callback: F)
@@ -80,191 +79,173 @@ impl CPU {
     loop {
       callback(self);
 
-      let opcode = OPCODE_MAP
-        .get(&self.memory.read(self.registers.get_pc()))
-        .expect("opcode not recognized.");
+      let instruction = Instruction::get(self.memory.read(self.registers.get_pc()));
       self.increment_pc(1);
       let current_pc = self.registers.get_pc();
 
-      match opcode.code {
-        // ADC
-        0x69 | 0x65 | 0x75 | 0x6D | 0x7D | 0x79 | 0x61 | 0x71 => self.adc(&opcode.mode),
+      match instruction.opcode {
+        OpCode::ADC => self.adc(&instruction.mode),
 
-        // AND
-        0x29 | 0x25 | 0x35 | 0x2D | 0x3D | 0x39 | 0x21 | 0x31 => self.and(&opcode.mode),
+        OpCode::_ALR => self.alr(),
 
-        // ASL
-        0x0A | 0x06 | 0x16 | 0x0E | 0x1E => self.asl(&opcode.mode),
+        OpCode::_ANC => self.anc(),
 
-        // BCC
-        0x90 => self.branch(!self.registers.get_flag(&Flag::Carry)),
+        OpCode::AND => self.and(&instruction.mode),
 
-        // BCS
-        0xB0 => self.branch(self.registers.get_flag(&Flag::Carry)),
+        OpCode::_ANE => self.ane(),
 
-        // BEQ
-        0xF0 => self.branch(self.registers.get_flag(&Flag::Zero)),
+        OpCode::_ARR => self.arr(),
 
-        // BIT
-        0x24 | 0x2C => self.bit(&opcode.mode),
+        OpCode::ASL => self.asl(&instruction.mode),
 
-        // BMI
-        0x30 => self.branch(self.registers.get_flag(&Flag::Negative)),
+        OpCode::BCC => self.branch(!self.registers.get_flag(&Flag::Carry)),
 
-        // BNE
-        0xD0 => self.branch(!self.registers.get_flag(&Flag::Zero)),
+        OpCode::BCS => self.branch(self.registers.get_flag(&Flag::Carry)),
 
-        // BPL
-        0x10 => self.branch(!self.registers.get_flag(&Flag::Negative)),
+        OpCode::BEQ => self.branch(self.registers.get_flag(&Flag::Zero)),
 
-        // BRK
-        0x00 => return,
+        OpCode::BIT => self.bit(&instruction.mode),
 
-        // BVC
-        0x50 => self.branch(!self.registers.get_flag(&Flag::Overflow)),
+        OpCode::BMI => self.branch(self.registers.get_flag(&Flag::Negative)),
 
-        // BCC
-        0x70 => self.branch(self.registers.get_flag(&Flag::Carry)),
+        OpCode::BNE => self.branch(!self.registers.get_flag(&Flag::Zero)),
 
-        // CLC
-        0x18 => self.registers.set_flag(&Flag::Carry, false),
+        OpCode::BPL => self.branch(!self.registers.get_flag(&Flag::Negative)),
 
-        // CLD
-        0xD8 => self.registers.set_flag(&Flag::Decimal, false),
+        OpCode::BRK => return,
 
-        // CLI
-        0x58 => self.registers.set_flag(&Flag::InterruptDisable, false),
+        OpCode::BVC => self.branch(!self.registers.get_flag(&Flag::Overflow)),
 
-        // CLV
-        0xB8 => self.registers.set_flag(&Flag::Overflow, false),
+        OpCode::BVS => self.branch(self.registers.get_flag(&Flag::Overflow)),
 
-        // CMP
-        0xC9 | 0xC5 | 0xD5 | 0xCD | 0xDD | 0xD9 | 0xC1 | 0xD1 => self.compare(&opcode.mode, &Register::A),
+        OpCode::CLC => self.registers.set_flag(&Flag::Carry, false),
 
-        // CPX
-        0xE0 | 0xE4 | 0xEC => self.compare(&opcode.mode, &Register::X),
+        OpCode::CLD => self.registers.set_flag(&Flag::Decimal, false),
 
-        // CPY
-        0xC0 | 0xC4 | 0xCC => self.compare(&opcode.mode, &Register::Y),
+        OpCode::CLI => self.registers.set_flag(&Flag::InterruptDisable, false),
 
-        // DEC
-        0xC6 | 0xD6 | 0xCE | 0xDE => self.dec(&opcode.mode),
+        OpCode::CLV => self.registers.set_flag(&Flag::Overflow, false),
 
-        // DEX
-        0xCA => self.decrement_reg(&Register::X),
+        OpCode::CMP => self.compare(&instruction.mode, &Register::A),
 
-        // DEY
-        0x88 => self.decrement_reg(&Register::Y),
+        OpCode::CPX => self.compare(&instruction.mode, &Register::X),
 
-        // EOR
-        0x49 | 0x45 | 0x55 | 0x4D | 0x5D | 0x59 | 0x41 | 0x51 => self.eor(&opcode.mode),
+        OpCode::CPY => self.compare(&instruction.mode, &Register::Y),
 
-        // INC
-        0xE6 | 0xF6 | 0xEE | 0xFE => self.inc(&opcode.mode),
+        OpCode::_DCP => self.dcp(&instruction.mode),
 
-        // INX
-        0xE8 => self.increment_reg(&Register::X),
+        OpCode::DEC => self.dec(&instruction.mode),
 
-        // INY
-        0xC8 => self.increment_reg(&Register::Y),
+        OpCode::DEX => self.decrement_reg(&Register::X),
 
-        // JMP
-        0x4C | 0x6C => self.jmp(&opcode.mode),
+        OpCode::DEY => self.decrement_reg(&Register::Y),
 
-        // JSR
-        0x20 => self.jsr(),
+        OpCode::EOR => self.eor(&instruction.mode),
 
-        // LDA
-        0xA9 | 0xA5 | 0xB5 | 0xAD | 0xBD | 0xB9 | 0xA1 | 0xB1 => self.load_reg(&opcode.mode, &Register::A),
+        OpCode::INC => self.inc(&instruction.mode),
 
-        // LDX
-        0xA2 | 0xA6 | 0xB6 | 0xAE | 0xBE => self.load_reg(&opcode.mode, &Register::X),
+        OpCode::INX => self.increment_reg(&Register::X),
 
-        // LDY
-        0xA0 | 0xA4 | 0xB4 | 0xAC | 0xBC => self.load_reg(&opcode.mode, &Register::Y),
+        OpCode::INY => self.increment_reg(&Register::Y),
 
-        // LSR
-        0x4A | 0x46 | 0x56 | 0x4E | 0x5E => self.lsr(&opcode.mode),
+        OpCode::_ISC => self.isc(&instruction.mode),
 
-        // NOP
-        0xEA => (),
+        OpCode::JAM => (),
 
-        // ORA
-        0x09 | 0x05 | 0x15 | 0x0D | 0x1D | 0x19 | 0x01 | 0x11 => self.ora(&opcode.mode),
+        OpCode::JMP => self.jmp(&instruction.mode),
 
-        // PHA
-        0x48 => self.stack_push(self.registers.get(&Register::A)),
+        OpCode::JSR => self.jsr(),
 
-        // PHP
-        0x08 => self.php(),
+        OpCode::_LAS => self.las(),
 
-        // PLA
-        0x68 => self.pla(),
+        OpCode::_LAX => self.lax(&instruction.mode),
 
-        // PLP
-        0x28 => self.plp(),
+        OpCode::LDA => self.load_reg(&instruction.mode, &Register::A),
 
-        // ROL
-        0x2A | 0x26 | 0x36 | 0x2E | 0x3E => self.rol(&opcode.mode),
+        OpCode::LDX => self.load_reg(&instruction.mode, &Register::X),
 
-        // ROR
-        0x6A | 0x66 | 0x76 | 0x6E | 0x7E => self.ror(&opcode.mode),
+        OpCode::LDY => self.load_reg(&instruction.mode, &Register::Y),
 
-        // RTI
-        0x40 => self.rti(),
+        OpCode::LSR => self.lsr(&instruction.mode),
 
-        // RTS
-        0x60 => self.rts(),
+        OpCode::_LXA => self.lxa(),
 
-        // SBC
-        0xE9 | 0xE5 | 0xF5 | 0xED | 0xFD | 0xF9 | 0xE1 | 0xF1 => self.sbc(&opcode.mode),
+        OpCode::NOP => (),
 
-        // SEC
-        0x38 => self.registers.set_flag(&Flag::Carry, true),
+        OpCode::_NOP => (),
 
-        // SED
-        0xF8 => self.registers.set_flag(&Flag::Decimal, true),
+        OpCode::ORA => self.ora(&instruction.mode),
 
-        // SEI
-        0x78 => self.registers.set_flag(&Flag::InterruptDisable, true),
+        OpCode::PHA => self.stack_push(self.registers.get(&Register::A)),
 
-        // STA
-        0x85 | 0x95 | 0x8D | 0x9D | 0x99 | 0x81 | 0x91 => self.store_reg(&opcode.mode, &Register::A),
+        OpCode::PHP => self.php(),
 
-        // STX
-        0x86 | 0x96 | 0x8E => self.store_reg(&opcode.mode, &Register::X),
+        OpCode::PLA => self.pla(),
 
-        // STY
-        0x84 | 0x94 | 0x8C => self.store_reg(&opcode.mode, &Register::Y),
+        OpCode::PLP => self.plp(),
 
-        // TAX
-        0xAA => self.transfer_reg(&Register::A, &Register::X),
+        OpCode::_RLA => self.rla(&instruction.mode),
 
-        // TAY
-        0xA8 => self.transfer_reg(&Register::A, &Register::Y),
+        OpCode::ROL => self.rol(&instruction.mode),
 
-        // TSX
-        0xBA => self.transfer_reg(&Register::SP, &Register::X),
+        OpCode::ROR => self.ror(&instruction.mode),
 
-        // TXA
-        0x8A => self.transfer_reg(&Register::X, &Register::A),
+        OpCode::_RRA => self.rra(&instruction.mode),
 
-        // TXS
-        0x9A => self.transfer_reg(&Register::X, &Register::SP),
+        OpCode::RTI => self.rti(),
 
-        // TYA
-        0x98 => self.transfer_reg(&Register::Y, &Register::A),
+        OpCode::RTS => self.rts(),
 
-        _ => todo!(""),
+        OpCode::_SAX => self.sax(&instruction.mode),
+
+        OpCode::SBC | OpCode::_SBC => self.sbc(&instruction.mode),
+
+        OpCode::_SBX => self.sbx(),
+
+        OpCode::SEC => self.registers.set_flag(&Flag::Carry, true),
+
+        OpCode::SED => self.registers.set_flag(&Flag::Decimal, true),
+
+        OpCode::SEI => self.registers.set_flag(&Flag::InterruptDisable, true),
+
+        OpCode::_SHA => self.sha(&instruction.mode),
+
+        OpCode::_SHX => self.shx(),
+
+        OpCode::_SHY => self.shy(),
+
+        OpCode::_SLO => self.slo(&instruction.mode),
+
+        OpCode::_SRE => self.sre(&instruction.mode),
+
+        OpCode::STA => self.store_reg(&instruction.mode, &Register::A),
+
+        OpCode::STX => self.store_reg(&instruction.mode, &Register::X),
+
+        OpCode::STY => self.store_reg(&instruction.mode, &Register::Y),
+
+        OpCode::_TAS => self.tas(),
+
+        OpCode::TAX => self.transfer_reg(&Register::A, &Register::X),
+
+        OpCode::TAY => self.transfer_reg(&Register::A, &Register::Y),
+
+        OpCode::TSX => self.transfer_reg(&Register::SP, &Register::X),
+
+        OpCode::TXA => self.transfer_reg(&Register::X, &Register::A),
+
+        OpCode::TXS => self.registers.set(&Register::SP, self.registers.get(&Register::X)),
+
+        OpCode::TYA => self.transfer_reg(&Register::Y, &Register::A),
       }
 
       if current_pc == self.registers.get_pc() {
-        self.increment_pc((opcode.len - 1) as u16);
+        self.increment_pc((instruction.len - 1) as u16);
       }
     }
   }
 
-  fn get_operand_addr(&self, mode: &Addressing) -> u16 {
+  pub fn get_operand_addr(&self, mode: &Addressing) -> u16 {
     match mode {
       Addressing::Immediate =>
         self.registers.get_pc(),
@@ -282,11 +263,15 @@ impl CPU {
         self.memory.readu16(self.registers.get_pc()).wrapping_add(self.registers.get(&Register::Y) as u16),
       Addressing::IndirectX => {
         let addr = self.memory.read(self.registers.get_pc()).wrapping_add(self.registers.get(&Register::X));
-        self.memory.readu16(addr as u16)
+        let lo = self.memory.read(addr as u16) as u16;
+        let hi = self.memory.read(addr.wrapping_add(1) as u16) as u16;
+        (hi << 8) | lo
       }
       Addressing::IndirectY => {
         let addr = self.memory.read(self.registers.get_pc());
-        self.memory.readu16(addr as u16).wrapping_add(self.registers.get(&Register::Y) as u16)
+        let lo = self.memory.read(addr as u16) as u16;
+        let hi = self.memory.read((addr).wrapping_add(1) as u16) as u16;
+        ((hi << 8) | lo).wrapping_add(self.registers.get(&Register::Y) as u16)
       }
       Addressing::Implied => panic!("Implied addressing doesn't yield an address."),
     }
@@ -324,11 +309,40 @@ impl CPU {
     self.update_zero_negative(self.registers.get(&Register::A));
   }
 
+  fn alr(&mut self) {
+    self.and(&Addressing::Immediate);
+    self.lsr(&Addressing::Immediate);
+  }
+
+  fn anc(&mut self) {
+    self.and(&Addressing::Immediate);
+    self.registers.set_flag(&Flag::Carry, (self.registers.get(&Register::A) >> 7) & 0b1 != 0);
+  }
+
   fn and(&mut self, mode: &Addressing) {
     let byte = self.memory.read(self.get_operand_addr(mode));
     self.registers.set(&Register::A, self.registers.get(&Register::A) & byte);
 
     self.update_zero_negative(self.registers.get(&Register::A));
+  }
+
+  fn ane(&mut self) {
+    let a = self.registers.get(&Register::A);
+    let x = self.registers.get(&Register::X);
+    let data = self.memory.read(self.get_operand_addr(&Addressing::Immediate));
+
+    self.registers.set(&Register::A, a & x & data);
+  }
+
+  fn arr(&mut self) {
+    self.and(&Addressing::Immediate);
+    self.ror(&Addressing::Immediate);
+
+    let b5 = (self.registers.get(&Register::A) >> 5) & 1;
+    let b6 = (self.registers.get(&Register::A) >> 6) & 1;
+
+    self.registers.set_flag(&Flag::Carry, b5 != 0);
+    self.registers.set_flag(&Flag::Overflow, b5 ^ b6 != 0);
   }
 
   fn asl(&mut self, mode: &Addressing) {
@@ -371,7 +385,12 @@ impl CPU {
     let comparable = self.registers.get(reg);
 
     self.registers.set_flag(&Flag::Carry, data <= comparable);
-    self.update_zero_negative(comparable.wrapping_sub(data))
+    self.update_zero_negative(comparable.wrapping_sub(data));
+  }
+
+  fn dcp(&mut self, mode: &Addressing) {
+    self.dec(mode);
+    self.compare(mode, &Register::A);
   }
 
   fn dec(&mut self, mode: &Addressing) {
@@ -407,6 +426,11 @@ impl CPU {
     self.update_zero_negative(self.registers.get(reg));
   }
 
+  fn isc(&mut self, mode: &Addressing) {
+    self.inc(mode);
+    self.sbc(mode);
+  }
+
   fn jmp(&mut self, mode: &Addressing) {
     match mode {
       Addressing::Absolute => {
@@ -432,6 +456,21 @@ impl CPU {
   fn jsr(&mut self) {
     self.stack_pushu16(self.registers.get_pc() + 1);
     self.registers.set_pc(self.get_operand_addr(&Addressing::Absolute));
+  }
+
+  fn las(&mut self) {
+    let data = self.memory.read(self.get_operand_addr(&Addressing::AbsoluteY)) & self.registers.get(&Register::SP);
+
+    self.registers.set(&Register::A, data);
+    self.registers.set(&Register::X, data);
+    self.registers.set(&Register::SP, data);
+
+    self.update_zero_negative(data);
+  }
+
+  fn lax(&mut self, mode: &Addressing) {
+    self.load_reg(mode, &Register::A);
+    self.load_reg(mode, &Register::X);
   }
 
   fn load_reg(&mut self, mode: &Addressing, reg: &Register) {
@@ -461,6 +500,16 @@ impl CPU {
     }
   }
 
+  fn lxa(&mut self) {
+    let data = self.memory.read(self.get_operand_addr(&Addressing::Immediate));
+    let res = self.registers.get(&Register::A) & data;
+
+    self.registers.set(&Register::A, res);
+    self.registers.set(&Register::X, res);
+
+    self.update_zero_negative(res);
+  }
+
   fn ora(&mut self, mode: &Addressing) {
     let byte = self.memory.read(self.get_operand_addr(mode));
     self.registers.set(&Register::A, self.registers.get(&Register::A) | byte);
@@ -469,7 +518,7 @@ impl CPU {
   }
 
   fn php(&mut self) {
-    let status = self.registers.get(&Register::P) | (0b11 << 5);
+    let status = self.registers.get(&Register::P) | (0b11 << 4);
     self.stack_push(status);
   }
 
@@ -483,6 +532,11 @@ impl CPU {
   fn plp(&mut self) {
     let status = (self.stack_pop() | (1 << 5)) & !(1 << 4);
     self.registers.set(&Register::P, status);
+  }
+
+  fn rla(&mut self, mode: &Addressing) {
+    self.rol(mode);
+    self.and(mode);
   }
 
   fn rol(&mut self, mode: &Addressing) {
@@ -533,6 +587,11 @@ impl CPU {
     }
   }
 
+  fn rra(&mut self, mode: &Addressing) {
+    self.ror(mode);
+    self.adc(mode);
+  }
+
   fn rti(&mut self) {
     let status = self.stack_pop();
     self.registers.set(&Register::P, (status | (1 << 5)) & !(1 << 4));
@@ -544,6 +603,13 @@ impl CPU {
   fn rts(&mut self) {
     let pc = self.stack_popu16().wrapping_add(1);
     self.registers.set_pc(pc);
+  }
+
+  fn sax(&mut self, mode: &Addressing) {
+    let a = self.registers.get(&Register::A);
+    let x = self.registers.get(&Register::X);
+
+    self.memory.write(self.get_operand_addr(mode), a & x);
   }
 
   fn sbc(&mut self, mode: &Addressing) {
@@ -564,8 +630,59 @@ impl CPU {
     self.update_zero_negative(self.registers.get(&Register::A));
   }
 
+  fn sbx(&mut self) {
+    let data_a = self.memory.read(self.get_operand_addr(&Addressing::Immediate));
+    let data_b = self.registers.get(&Register::A) & self.registers.get(&Register::X);
+
+    let res = data_b.wrapping_sub(data_a);
+
+    self.registers.set_flag(&Flag::Carry, data_b <= data_a);
+    self.update_zero_negative(res);
+    self.registers.set(&Register::X, res);
+  }
+
+  fn sha(&mut self, mode: &Addressing) {
+    let addr = self.get_operand_addr(mode);
+    self.memory.write(addr,
+      self.registers.get(&Register::A) & self.registers.get(&Register::X) & ((addr >> 8) as u8).wrapping_add(1));
+  }
+
+  fn shx(&mut self) {
+    let addr = self.get_operand_addr(&Addressing::AbsoluteY);
+    let x = self.registers.get(&Register::X);
+
+    self.memory.write(addr, x  & ((addr >> 8) as u8).wrapping_add(1));
+  }
+
+  fn shy(&mut self) {
+    let addr = self.get_operand_addr(&Addressing::AbsoluteY);
+    let y = self.registers.get(&Register::Y);
+
+    self.memory.write(addr, y  & ((addr >> 8) as u8).wrapping_add(1));
+  }
+
+  fn slo(&mut self, mode: &Addressing) {
+    self.asl(mode);
+    self.ora(mode);
+  }
+
+  fn sre(&mut self, mode: &Addressing) {
+    self.lsr(mode);
+    self.eor(mode);
+  }
+
   fn store_reg(&mut self, mode: &Addressing, reg: &Register) {
     self.memory.write(self.get_operand_addr(mode), self.registers.get(reg));
+  }
+
+  fn tas(&mut self) {
+    let a = self.registers.get(&Register::A);
+    let x = self.registers.get(&Register::X);
+    let addr = self.get_operand_addr(&Addressing::AbsoluteY);
+
+
+    self.registers.set(&Register::SP, a & x);
+    self.memory.write(addr, a & x & ((addr >> 8) as u8).wrapping_add(1));
   }
 
   fn transfer_reg(&mut self, from: &Register, to: &Register) {
