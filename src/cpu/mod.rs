@@ -1,7 +1,7 @@
 pub mod register;
 pub mod instruction;
 
-use super::memory::{Memory, rom::ROM};
+use crate::memory::{Memory, cartridge::Cartridge};
 use instruction::{Addressing, Instruction, OpCode};
 use register::{Flag, Register, Registers};
 
@@ -13,7 +13,7 @@ pub struct CPU {
 impl CPU {
   const STACK_START: u16 = 0x0100;
 
-  pub fn new(cartridge: ROM) -> Self {
+  pub fn new(cartridge: Cartridge) -> Self {
     CPU {
       registers: Registers::new(),
       memory: Memory::new(cartridge),
@@ -36,21 +36,21 @@ impl CPU {
   }
 
   fn stack_push(&mut self, data: u8) {
-    if self.registers.get(&Register::SP) == 0 {
+    if self.registers.get(Register::SP) == 0 {
       panic!("Attempted to store beyone stack capacity.");
     }
 
-    self.memory.write(CPU::STACK_START.wrapping_add(self.registers.get(&Register::SP) as u16), data);
-    self.registers.set(&Register::SP, self.registers.get(&Register::SP).wrapping_sub(1));
+    self.memory.write(CPU::STACK_START.wrapping_add(self.registers.get(Register::SP) as u16), data);
+    self.registers.set(Register::SP, self.registers.get(Register::SP).wrapping_sub(1));
   }
 
   fn stack_pop(&mut self) -> u8 {
-    if self.registers.get(&Register::SP) == 0x1E {
+    if self.registers.get(Register::SP) == 0x1E {
       panic!("Attempted to pop empty stack");
     }
 
-    self.registers.set(&Register::SP, self.registers.get(&Register::SP).wrapping_add(1));
-    self.memory.read(CPU::STACK_START.wrapping_add(self.registers.get(&Register::SP) as u16))
+    self.registers.set(Register::SP, self.registers.get(Register::SP).wrapping_add(1));
+    self.memory.read(CPU::STACK_START.wrapping_add(self.registers.get(Register::SP) as u16))
   }
 
   fn stack_pushu16(&mut self, data: u16) {
@@ -84,89 +84,89 @@ impl CPU {
       let current_pc = self.registers.get_pc();
 
       match instruction.opcode {
-        OpCode::ADC => self.adc(&instruction.mode),
+        OpCode::ADC => self.adc(instruction.mode),
 
         OpCode::_ALR => self.alr(),
 
         OpCode::_ANC => self.anc(),
 
-        OpCode::AND => self.and(&instruction.mode),
+        OpCode::AND => self.and(instruction.mode),
 
         OpCode::_ANE => self.ane(),
 
         OpCode::_ARR => self.arr(),
 
-        OpCode::ASL => self.asl(&instruction.mode),
+        OpCode::ASL => self.asl(instruction.mode),
 
-        OpCode::BCC => self.branch(!self.registers.get_flag(&Flag::Carry)),
+        OpCode::BCC => self.branch(!self.registers.get_flag(Flag::Carry)),
 
-        OpCode::BCS => self.branch(self.registers.get_flag(&Flag::Carry)),
+        OpCode::BCS => self.branch(self.registers.get_flag(Flag::Carry)),
 
-        OpCode::BEQ => self.branch(self.registers.get_flag(&Flag::Zero)),
+        OpCode::BEQ => self.branch(self.registers.get_flag(Flag::Zero)),
 
-        OpCode::BIT => self.bit(&instruction.mode),
+        OpCode::BIT => self.bit(instruction.mode),
 
-        OpCode::BMI => self.branch(self.registers.get_flag(&Flag::Negative)),
+        OpCode::BMI => self.branch(self.registers.get_flag(Flag::Negative)),
 
-        OpCode::BNE => self.branch(!self.registers.get_flag(&Flag::Zero)),
+        OpCode::BNE => self.branch(!self.registers.get_flag(Flag::Zero)),
 
-        OpCode::BPL => self.branch(!self.registers.get_flag(&Flag::Negative)),
+        OpCode::BPL => self.branch(!self.registers.get_flag(Flag::Negative)),
 
         OpCode::BRK => return,
 
-        OpCode::BVC => self.branch(!self.registers.get_flag(&Flag::Overflow)),
+        OpCode::BVC => self.branch(!self.registers.get_flag(Flag::Overflow)),
 
-        OpCode::BVS => self.branch(self.registers.get_flag(&Flag::Overflow)),
+        OpCode::BVS => self.branch(self.registers.get_flag(Flag::Overflow)),
 
-        OpCode::CLC => self.registers.set_flag(&Flag::Carry, false),
+        OpCode::CLC => self.registers.set_flag(Flag::Carry, false),
 
-        OpCode::CLD => self.registers.set_flag(&Flag::Decimal, false),
+        OpCode::CLD => self.registers.set_flag(Flag::Decimal, false),
 
-        OpCode::CLI => self.registers.set_flag(&Flag::InterruptDisable, false),
+        OpCode::CLI => self.registers.set_flag(Flag::InterruptDisable, false),
 
-        OpCode::CLV => self.registers.set_flag(&Flag::Overflow, false),
+        OpCode::CLV => self.registers.set_flag(Flag::Overflow, false),
 
-        OpCode::CMP => self.compare(&instruction.mode, &Register::A),
+        OpCode::CMP => self.compare(instruction.mode, Register::A),
 
-        OpCode::CPX => self.compare(&instruction.mode, &Register::X),
+        OpCode::CPX => self.compare(instruction.mode, Register::X),
 
-        OpCode::CPY => self.compare(&instruction.mode, &Register::Y),
+        OpCode::CPY => self.compare(instruction.mode, Register::Y),
 
-        OpCode::_DCP => self.dcp(&instruction.mode),
+        OpCode::_DCP => self.dcp(instruction.mode),
 
-        OpCode::DEC => self.dec(&instruction.mode),
+        OpCode::DEC => self.dec(instruction.mode),
 
-        OpCode::DEX => self.decrement_reg(&Register::X),
+        OpCode::DEX => self.decrement_reg(Register::X),
 
-        OpCode::DEY => self.decrement_reg(&Register::Y),
+        OpCode::DEY => self.decrement_reg(Register::Y),
 
-        OpCode::EOR => self.eor(&instruction.mode),
+        OpCode::EOR => self.eor(instruction.mode),
 
-        OpCode::INC => self.inc(&instruction.mode),
+        OpCode::INC => self.inc(instruction.mode),
 
-        OpCode::INX => self.increment_reg(&Register::X),
+        OpCode::INX => self.increment_reg(Register::X),
 
-        OpCode::INY => self.increment_reg(&Register::Y),
+        OpCode::INY => self.increment_reg(Register::Y),
 
-        OpCode::_ISC => self.isc(&instruction.mode),
+        OpCode::_ISC => self.isc(instruction.mode),
 
         OpCode::JAM => (),
 
-        OpCode::JMP => self.jmp(&instruction.mode),
+        OpCode::JMP => self.jmp(instruction.mode),
 
         OpCode::JSR => self.jsr(),
 
         OpCode::_LAS => self.las(),
 
-        OpCode::_LAX => self.lax(&instruction.mode),
+        OpCode::_LAX => self.lax(instruction.mode),
 
-        OpCode::LDA => self.load_reg(&instruction.mode, &Register::A),
+        OpCode::LDA => self.load_reg(instruction.mode, Register::A),
 
-        OpCode::LDX => self.load_reg(&instruction.mode, &Register::X),
+        OpCode::LDX => self.load_reg(instruction.mode, Register::X),
 
-        OpCode::LDY => self.load_reg(&instruction.mode, &Register::Y),
+        OpCode::LDY => self.load_reg(instruction.mode, Register::Y),
 
-        OpCode::LSR => self.lsr(&instruction.mode),
+        OpCode::LSR => self.lsr(instruction.mode),
 
         OpCode::_LXA => self.lxa(),
 
@@ -174,9 +174,9 @@ impl CPU {
 
         OpCode::_NOP => (),
 
-        OpCode::ORA => self.ora(&instruction.mode),
+        OpCode::ORA => self.ora(instruction.mode),
 
-        OpCode::PHA => self.stack_push(self.registers.get(&Register::A)),
+        OpCode::PHA => self.stack_push(self.registers.get(Register::A)),
 
         OpCode::PHP => self.php(),
 
@@ -184,59 +184,59 @@ impl CPU {
 
         OpCode::PLP => self.plp(),
 
-        OpCode::_RLA => self.rla(&instruction.mode),
+        OpCode::_RLA => self.rla(instruction.mode),
 
-        OpCode::ROL => self.rol(&instruction.mode),
+        OpCode::ROL => self.rol(instruction.mode),
 
-        OpCode::ROR => self.ror(&instruction.mode),
+        OpCode::ROR => self.ror(instruction.mode),
 
-        OpCode::_RRA => self.rra(&instruction.mode),
+        OpCode::_RRA => self.rra(instruction.mode),
 
         OpCode::RTI => self.rti(),
 
         OpCode::RTS => self.rts(),
 
-        OpCode::_SAX => self.sax(&instruction.mode),
+        OpCode::_SAX => self.sax(instruction.mode),
 
-        OpCode::SBC | OpCode::_SBC => self.sbc(&instruction.mode),
+        OpCode::SBC | OpCode::_SBC => self.sbc(instruction.mode),
 
         OpCode::_SBX => self.sbx(),
 
-        OpCode::SEC => self.registers.set_flag(&Flag::Carry, true),
+        OpCode::SEC => self.registers.set_flag(Flag::Carry, true),
 
-        OpCode::SED => self.registers.set_flag(&Flag::Decimal, true),
+        OpCode::SED => self.registers.set_flag(Flag::Decimal, true),
 
-        OpCode::SEI => self.registers.set_flag(&Flag::InterruptDisable, true),
+        OpCode::SEI => self.registers.set_flag(Flag::InterruptDisable, true),
 
-        OpCode::_SHA => self.sha(&instruction.mode),
+        OpCode::_SHA => self.sha(instruction.mode),
 
         OpCode::_SHX => self.shx(),
 
         OpCode::_SHY => self.shy(),
 
-        OpCode::_SLO => self.slo(&instruction.mode),
+        OpCode::_SLO => self.slo(instruction.mode),
 
-        OpCode::_SRE => self.sre(&instruction.mode),
+        OpCode::_SRE => self.sre(instruction.mode),
 
-        OpCode::STA => self.store_reg(&instruction.mode, &Register::A),
+        OpCode::STA => self.store_reg(instruction.mode, Register::A),
 
-        OpCode::STX => self.store_reg(&instruction.mode, &Register::X),
+        OpCode::STX => self.store_reg(instruction.mode, Register::X),
 
-        OpCode::STY => self.store_reg(&instruction.mode, &Register::Y),
+        OpCode::STY => self.store_reg(instruction.mode, Register::Y),
 
         OpCode::_TAS => self.tas(),
 
-        OpCode::TAX => self.transfer_reg(&Register::A, &Register::X),
+        OpCode::TAX => self.transfer_reg(Register::A, Register::X),
 
-        OpCode::TAY => self.transfer_reg(&Register::A, &Register::Y),
+        OpCode::TAY => self.transfer_reg(Register::A, Register::Y),
 
-        OpCode::TSX => self.transfer_reg(&Register::SP, &Register::X),
+        OpCode::TSX => self.transfer_reg(Register::SP, Register::X),
 
-        OpCode::TXA => self.transfer_reg(&Register::X, &Register::A),
+        OpCode::TXA => self.transfer_reg(Register::X, Register::A),
 
-        OpCode::TXS => self.registers.set(&Register::SP, self.registers.get(&Register::X)),
+        OpCode::TXS => self.registers.set(Register::SP, self.registers.get(Register::X)),
 
-        OpCode::TYA => self.transfer_reg(&Register::Y, &Register::A),
+        OpCode::TYA => self.transfer_reg(Register::Y, Register::A),
       }
 
       if current_pc == self.registers.get_pc() {
@@ -245,7 +245,7 @@ impl CPU {
     }
   }
 
-  pub fn get_operand_addr(&self, mode: &Addressing) -> u16 {
+  pub fn get_operand_addr(&mut self, mode: Addressing) -> u16 {
     match mode {
       Addressing::Immediate =>
         self.registers.get_pc(),
@@ -254,15 +254,15 @@ impl CPU {
       Addressing::Absolute | Addressing::AbsoluteIndirect =>
         self.memory.readu16(self.registers.get_pc()),
       Addressing::ZeroPageX =>
-        self.memory.read(self.registers.get_pc()).wrapping_add(self.registers.get(&Register::X)) as u16,
+        self.memory.read(self.registers.get_pc()).wrapping_add(self.registers.get(Register::X)) as u16,
       Addressing::ZeroPageY =>
-        self.memory.read(self.registers.get_pc()).wrapping_add(self.registers.get(&Register::Y)) as u16,
+        self.memory.read(self.registers.get_pc()).wrapping_add(self.registers.get(Register::Y)) as u16,
       Addressing::AbsoluteX =>
-        self.memory.readu16(self.registers.get_pc()).wrapping_add(self.registers.get(&Register::X) as u16),
+        self.memory.readu16(self.registers.get_pc()).wrapping_add(self.registers.get(Register::X) as u16),
       Addressing::AbsoluteY =>
-        self.memory.readu16(self.registers.get_pc()).wrapping_add(self.registers.get(&Register::Y) as u16),
+        self.memory.readu16(self.registers.get_pc()).wrapping_add(self.registers.get(Register::Y) as u16),
       Addressing::IndirectX => {
-        let addr = self.memory.read(self.registers.get_pc()).wrapping_add(self.registers.get(&Register::X));
+        let addr = self.memory.read(self.registers.get_pc()).wrapping_add(self.registers.get(Register::X));
         let lo = self.memory.read(addr as u16) as u16;
         let hi = self.memory.read(addr.wrapping_add(1) as u16) as u16;
         (hi << 8) | lo
@@ -271,7 +271,7 @@ impl CPU {
         let addr = self.memory.read(self.registers.get_pc());
         let lo = self.memory.read(addr as u16) as u16;
         let hi = self.memory.read((addr).wrapping_add(1) as u16) as u16;
-        ((hi << 8) | lo).wrapping_add(self.registers.get(&Register::Y) as u16)
+        ((hi << 8) | lo).wrapping_add(self.registers.get(Register::Y) as u16)
       }
       Addressing::Implied => panic!("Implied addressing doesn't yield an address."),
     }
@@ -279,98 +279,102 @@ impl CPU {
 
   fn update_zero_negative(&mut self, res: u8) {
     if res == 0 {
-      self.registers.set_flag(&Flag::Zero, true);
+      self.registers.set_flag(Flag::Zero, true);
     } else {
-      self.registers.set_flag(&Flag::Zero, false);
+      self.registers.set_flag(Flag::Zero, false);
     }
 
     if (res >> 7) & 0b1 != 0 {
-      self.registers.set_flag(&Flag::Negative, true);
+      self.registers.set_flag(Flag::Negative, true);
     } else {
-      self.registers.set_flag(&Flag::Negative, false);
+      self.registers.set_flag(Flag::Negative, false);
     }
   }
 
-  fn adc(&mut self, mode: &Addressing) {
-    let val = self.memory.read(self.get_operand_addr(mode));
+  fn adc(&mut self, mode: Addressing) {
+    let addr = self.get_operand_addr(mode);
+    let val = self.memory.read(addr);
 
-    let raw_res = (self.registers.get(&Register::A) as u16)
-      .wrapping_add( if self.registers.get_flag(&Flag::Carry) { 1 } else { 0 })
+    let raw_res = (self.registers.get(Register::A) as u16)
+      .wrapping_add( if self.registers.get_flag(Flag::Carry) { 1 } else { 0 })
       .wrapping_add(val as u16);
 
     let res = raw_res as u8;
 
-    self.registers.set_flag(&Flag::Carry, (res as u16) < raw_res);
-    self.registers.set_flag(&Flag::Overflow,
-      (res ^ self.registers.get(&Register::A)) & (res ^ val) & 0x80 != 0
+    self.registers.set_flag(Flag::Carry, (res as u16) < raw_res);
+    self.registers.set_flag(Flag::Overflow,
+      (res ^ self.registers.get(Register::A)) & (res ^ val) & 0x80 != 0
     );
 
-    self.registers.set(&Register::A, res);
-    self.update_zero_negative(self.registers.get(&Register::A));
+    self.registers.set(Register::A, res);
+    self.update_zero_negative(self.registers.get(Register::A));
   }
 
   fn alr(&mut self) {
-    self.and(&Addressing::Immediate);
-    self.lsr(&Addressing::Immediate);
+    self.and(Addressing::Immediate);
+    self.lsr(Addressing::Immediate);
   }
 
   fn anc(&mut self) {
-    self.and(&Addressing::Immediate);
-    self.registers.set_flag(&Flag::Carry, (self.registers.get(&Register::A) >> 7) & 0b1 != 0);
+    self.and(Addressing::Immediate);
+    self.registers.set_flag(Flag::Carry, (self.registers.get(Register::A) >> 7) & 0b1 != 0);
   }
 
-  fn and(&mut self, mode: &Addressing) {
-    let byte = self.memory.read(self.get_operand_addr(mode));
-    self.registers.set(&Register::A, self.registers.get(&Register::A) & byte);
+  fn and(&mut self, mode: Addressing) {
+    let addr = self.get_operand_addr(mode);
+    let byte = self.memory.read(addr);
+    self.registers.set(Register::A, self.registers.get(Register::A) & byte);
 
-    self.update_zero_negative(self.registers.get(&Register::A));
+    self.update_zero_negative(self.registers.get(Register::A));
   }
 
   fn ane(&mut self) {
-    let a = self.registers.get(&Register::A);
-    let x = self.registers.get(&Register::X);
-    let data = self.memory.read(self.get_operand_addr(&Addressing::Immediate));
+    let a = self.registers.get(Register::A);
+    let x = self.registers.get(Register::X);
+    let addr = self.get_operand_addr(Addressing::Immediate);
+    let data = self.memory.read(addr);
 
-    self.registers.set(&Register::A, a & x & data);
+    self.registers.set(Register::A, a & x & data);
   }
 
   fn arr(&mut self) {
-    self.and(&Addressing::Immediate);
-    self.ror(&Addressing::Immediate);
+    self.and(Addressing::Immediate);
+    self.ror(Addressing::Immediate);
 
-    let b5 = (self.registers.get(&Register::A) >> 5) & 1;
-    let b6 = (self.registers.get(&Register::A) >> 6) & 1;
+    let b5 = (self.registers.get(Register::A) >> 5) & 1;
+    let b6 = (self.registers.get(Register::A) >> 6) & 1;
 
-    self.registers.set_flag(&Flag::Carry, b5 != 0);
-    self.registers.set_flag(&Flag::Overflow, b5 ^ b6 != 0);
+    self.registers.set_flag(Flag::Carry, b5 != 0);
+    self.registers.set_flag(Flag::Overflow, b5 ^ b6 != 0);
   }
 
-  fn asl(&mut self, mode: &Addressing) {
+  fn asl(&mut self, mode: Addressing) {
     match mode {
       Addressing::Implied => {
-        let data = self.registers.get(&Register::A);
-        self.registers.set_flag(&Flag::Carry, (data >> 7) & 0b1 != 0);
+        let data = self.registers.get(Register::A);
+        self.registers.set_flag(Flag::Carry, (data >> 7) & 0b1 != 0);
 
-        self.registers.set(&Register::A, data << 1);
-        self.update_zero_negative(self.registers.get(&Register::A));
+        self.registers.set(Register::A, data << 1);
+        self.update_zero_negative(self.registers.get(Register::A));
       }
        _ => {
         let addr = self.get_operand_addr(mode);
         let data = self.memory.read(addr);
-        self.registers.set_flag(&Flag::Carry, (data >> 7) & 0b1 != 0);
+        self.registers.set_flag(Flag::Carry, (data >> 7) & 0b1 != 0);
 
         self.memory.write(addr, data << 1);
-        self.update_zero_negative(self.memory.read(addr));
+        self.update_zero_negative(data << 1);
       }
     }
   }
 
-  fn bit(&mut self, mode: &Addressing) {
-    let data = self.memory.read(self.get_operand_addr(mode));
+  fn bit(&mut self, mode: Addressing) {
+    let addr = self.get_operand_addr(mode);
+    let data = self.memory.read(addr);
 
-    self.registers.set_flag(&Flag::Zero, data & self.registers.get(&Register::A) == 0);
-    self.registers.set_flag(&Flag::Overflow, (data >> 6) & 0b1 != 0);
-    self.registers.set_flag(&Flag::Negative, (data >> 7) & 0b1 != 0);
+    self.registers.set_flag(Flag::Zero, data & self.registers.get(Register::A) == 0);
+    self.registers.set_flag(Flag::Overflow, (data >> 6) & 0b1 != 0);
+    self.registers.set_flag(Flag::Negative, (data >> 7) & 0b1 != 0);
   }
 
   fn branch(&mut self, condition: bool) {
@@ -380,61 +384,64 @@ impl CPU {
     self.registers.set_pc(self.registers.get_pc().wrapping_add(1).wrapping_add(delta as u16));
   }
 
-  fn compare(&mut self, mode: &Addressing, reg: &Register) {
-    let data = self.memory.read(self.get_operand_addr(mode));
+  fn compare(&mut self, mode: Addressing, reg: Register) {
+    let addr = self.get_operand_addr(mode);
+    let data = self.memory.read(addr);
     let comparable = self.registers.get(reg);
 
-    self.registers.set_flag(&Flag::Carry, data <= comparable);
+    self.registers.set_flag(Flag::Carry, data <= comparable);
     self.update_zero_negative(comparable.wrapping_sub(data));
   }
 
-  fn dcp(&mut self, mode: &Addressing) {
+  fn dcp(&mut self, mode: Addressing) {
     self.dec(mode);
-    self.compare(mode, &Register::A);
+    self.compare(mode, Register::A);
   }
 
-  fn dec(&mut self, mode: &Addressing) {
+  fn dec(&mut self, mode: Addressing) {
     let addr = self.get_operand_addr(mode);
     let data = self.memory.read(addr);
 
     self.memory.write(addr, data.wrapping_sub(1));
-    self.update_zero_negative(self.memory.read(addr));
+    self.update_zero_negative(data.wrapping_sub(1));
   }
 
-  fn decrement_reg(&mut self, reg: &Register) {
+  fn decrement_reg(&mut self, reg: Register) {
     self.registers.set(reg, self.registers.get(reg).wrapping_sub(1));
     self.update_zero_negative(self.registers.get(reg));
   }
 
-  fn eor(&mut self, mode: &Addressing) {
-    let byte = self.memory.read(self.get_operand_addr(mode));
-    self.registers.set(&Register::A, self.registers.get(&Register::A) ^ byte);
+  fn eor(&mut self, mode: Addressing) {
+    let addr = self.get_operand_addr(mode);
+    let byte = self.memory.read(addr);
+    self.registers.set(Register::A, self.registers.get(Register::A) ^ byte);
 
-    self.update_zero_negative(self.registers.get(&Register::A));
+    self.update_zero_negative(self.registers.get(Register::A));
   }
 
-  fn inc(&mut self, mode: &Addressing) {
+  fn inc(&mut self, mode: Addressing) {
     let addr = self.get_operand_addr(mode);
     let data = self.memory.read(addr);
 
     self.memory.write(addr, data.wrapping_add(1));
-    self.update_zero_negative(self.memory.read(addr));
+    self.update_zero_negative(data.wrapping_add(1));
   }
 
-  fn increment_reg(&mut self, reg: &Register) {
+  fn increment_reg(&mut self, reg: Register) {
     self.registers.set(reg, self.registers.get(reg).wrapping_add(1));
     self.update_zero_negative(self.registers.get(reg));
   }
 
-  fn isc(&mut self, mode: &Addressing) {
+  fn isc(&mut self, mode: Addressing) {
     self.inc(mode);
     self.sbc(mode);
   }
 
-  fn jmp(&mut self, mode: &Addressing) {
+  fn jmp(&mut self, mode: Addressing) {
     match mode {
       Addressing::Absolute => {
-        self.registers.set_pc(self.get_operand_addr(mode));
+        let addr = self.get_operand_addr(mode);
+        self.registers.set_pc(addr);
       }
       Addressing::AbsoluteIndirect => {
         let addr = self.get_operand_addr(mode);
@@ -455,146 +462,155 @@ impl CPU {
 
   fn jsr(&mut self) {
     self.stack_pushu16(self.registers.get_pc() + 1);
-    self.registers.set_pc(self.get_operand_addr(&Addressing::Absolute));
+    let addr = self.get_operand_addr(Addressing::Absolute);
+    self.registers.set_pc(addr);
   }
 
   fn las(&mut self) {
-    let data = self.memory.read(self.get_operand_addr(&Addressing::AbsoluteY)) & self.registers.get(&Register::SP);
+    let addr = self.get_operand_addr(Addressing::AbsoluteY);
+    let data = self.memory.read(addr) & self.registers.get(Register::SP);
 
-    self.registers.set(&Register::A, data);
-    self.registers.set(&Register::X, data);
-    self.registers.set(&Register::SP, data);
+    self.registers.set(Register::A, data);
+    self.registers.set(Register::X, data);
+    self.registers.set(Register::SP, data);
 
     self.update_zero_negative(data);
   }
 
-  fn lax(&mut self, mode: &Addressing) {
-    self.load_reg(mode, &Register::A);
-    self.load_reg(mode, &Register::X);
+  fn lax(&mut self, mode: Addressing) {
+    self.load_reg(mode, Register::A);
+    self.load_reg(mode, Register::X);
   }
 
-  fn load_reg(&mut self, mode: &Addressing, reg: &Register) {
-    let val = self.memory.read(self.get_operand_addr(mode));
+  fn load_reg(&mut self, mode: Addressing, reg: Register) {
+    let addr = self.get_operand_addr(mode);
+    let val = self.memory.read(addr);
     self.registers.set(reg, val);
 
     self.update_zero_negative(val);
   }
 
-  fn lsr(&mut self, mode: &Addressing) {
+  fn lsr(&mut self, mode: Addressing) {
     match mode {
       Addressing::Implied => {
-        let data = self.registers.get(&Register::A);
-        self.registers.set_flag(&Flag::Carry, data & 0b1 != 0);
+        let data = self.registers.get(Register::A);
+        self.registers.set_flag(Flag::Carry, data & 0b1 != 0);
 
-        self.registers.set(&Register::A, data >> 1);
-        self.update_zero_negative(self.registers.get(&Register::A));
+        self.registers.set(Register::A, data >> 1);
+        self.update_zero_negative(self.registers.get(Register::A));
       }
        _ => {
         let addr = self.get_operand_addr(mode);
         let data = self.memory.read(addr);
-        self.registers.set_flag(&Flag::Carry, data & 0b1 != 0);
+        self.registers.set_flag(Flag::Carry, data & 0b1 != 0);
 
         self.memory.write(addr, data >> 1);
-        self.update_zero_negative(self.memory.read(addr));
+        self.update_zero_negative(data >> 1);
       }
     }
   }
 
   fn lxa(&mut self) {
-    let data = self.memory.read(self.get_operand_addr(&Addressing::Immediate));
-    let res = self.registers.get(&Register::A) & data;
+    let addr = self.get_operand_addr(Addressing::Immediate);
+    let data = self.memory.read(addr);
+    let res = self.registers.get(Register::A) & data;
 
-    self.registers.set(&Register::A, res);
-    self.registers.set(&Register::X, res);
+    self.registers.set(Register::A, res);
+    self.registers.set(Register::X, res);
 
     self.update_zero_negative(res);
   }
 
-  fn ora(&mut self, mode: &Addressing) {
-    let byte = self.memory.read(self.get_operand_addr(mode));
-    self.registers.set(&Register::A, self.registers.get(&Register::A) | byte);
+  fn ora(&mut self, mode: Addressing) {
+    let addr = self.get_operand_addr(mode);
+    let byte = self.memory.read(addr);
+    self.registers.set(Register::A, self.registers.get(Register::A) | byte);
 
-    self.update_zero_negative(self.registers.get(&Register::A));
+    self.update_zero_negative(self.registers.get(Register::A));
   }
 
   fn php(&mut self) {
-    let status = self.registers.get(&Register::P) | (0b11 << 4);
+    let status = self.registers.get(Register::P) | (0b11 << 4);
     self.stack_push(status);
   }
 
   fn pla(&mut self) {
     let val = self.stack_pop();
-    self.registers.set(&Register::A, val);
+    self.registers.set(Register::A, val);
 
     self.update_zero_negative(val);
   }
 
   fn plp(&mut self) {
     let status = (self.stack_pop() | (1 << 5)) & !(1 << 4);
-    self.registers.set(&Register::P, status);
+    self.registers.set(Register::P, status);
   }
 
-  fn rla(&mut self, mode: &Addressing) {
+  fn rla(&mut self, mode: Addressing) {
     self.rol(mode);
     self.and(mode);
   }
 
-  fn rol(&mut self, mode: &Addressing) {
+  fn rol(&mut self, mode: Addressing) {
     match mode {
       Addressing::Implied => {
-        let data = self.registers.get(&Register::A);
-        let prev_carry = self.registers.get_flag(&Flag::Carry);
+        let data = self.registers.get(Register::A);
+        let prev_carry = self.registers.get_flag(Flag::Carry);
 
-        self.registers.set_flag(&Flag::Carry, (data >> 7) & 0b1 != 0);
+        self.registers.set_flag(Flag::Carry, (data >> 7) & 0b1 != 0);
 
-        self.registers.set(&Register::A, (data << 1) | if prev_carry { 1 } else { 0 });
-        self.update_zero_negative(self.registers.get(&Register::A));
+        self.registers.set(Register::A, (data << 1) | if prev_carry { 1 } else { 0 });
+        self.update_zero_negative(self.registers.get(Register::A));
       }
        _ => {
         let addr = self.get_operand_addr(mode);
         let data = self.memory.read(addr);
-        let prev_carry = self.registers.get_flag(&Flag::Carry);
+        let prev_carry = self.registers.get_flag(Flag::Carry);
 
-        self.registers.set_flag(&Flag::Carry, (data >> 7) & 0b1 != 0);
+        self.registers.set_flag(Flag::Carry, (data >> 7) & 0b1 != 0);
 
-        self.memory.write(addr, (data << 1) | if prev_carry { 1 } else { 0 });
-        self.update_zero_negative(self.memory.read(addr));
+        let res = (data << 1) | if prev_carry { 1 } else { 0 };
+
+        self.memory.write(addr, res);
+        self.update_zero_negative(res);
       }
     }
   }
 
-  fn ror(&mut self, mode: &Addressing) {
+  fn ror(&mut self, mode: Addressing) {
     match mode {
       Addressing::Implied => {
-        let data = self.registers.get(&Register::A);
-        let prev_carry = self.registers.get_flag(&Flag::Carry);
+        let data = self.registers.get(Register::A);
+        let prev_carry = self.registers.get_flag(Flag::Carry);
 
-        self.registers.set_flag(&Flag::Carry, data & 0b1 != 0);
+        self.registers.set_flag(Flag::Carry, data & 0b1 != 0);
 
-        self.registers.set(&Register::A, (data >> 1) | if prev_carry { 1 << 7 } else { 0 });
-        self.update_zero_negative(self.registers.get(&Register::A));
+        self.registers.set(Register::A, (data >> 1) | if prev_carry { 1 << 7 } else { 0 });
+        self.update_zero_negative(self.registers.get(Register::A));
       }
        _ => {
         let addr = self.get_operand_addr(mode);
         let data = self.memory.read(addr);
-        let prev_carry = self.registers.get_flag(&Flag::Carry);
+        let prev_carry = self.registers.get_flag(Flag::Carry);
 
-        self.registers.set_flag(&Flag::Carry, data & 0b1 != 0);
+        self.registers.set_flag(Flag::Carry, data & 0b1 != 0);
 
-        self.memory.write(addr, (data >> 1) | if prev_carry { 1 << 7 } else { 0 });
-        self.update_zero_negative(self.memory.read(addr));
+        let res = (data >> 1) | if prev_carry { 1 << 7 } else { 0 };
+
+        self.memory.write(addr, res);
+        self.update_zero_negative(res);
       }
     }
   }
 
-  fn rra(&mut self, mode: &Addressing) {
+  fn rra(&mut self, mode: Addressing) {
     self.ror(mode);
     self.adc(mode);
   }
 
   fn rti(&mut self) {
     let status = self.stack_pop();
-    self.registers.set(&Register::P, (status | (1 << 5)) & !(1 << 4));
+    self.registers.set(Register::P, (status | (1 << 5)) & !(1 << 4));
 
     let pc = self.stack_popu16();
     self.registers.set_pc(pc);
@@ -605,87 +621,91 @@ impl CPU {
     self.registers.set_pc(pc);
   }
 
-  fn sax(&mut self, mode: &Addressing) {
-    let a = self.registers.get(&Register::A);
-    let x = self.registers.get(&Register::X);
+  fn sax(&mut self, mode: Addressing) {
+    let a = self.registers.get(Register::A);
+    let x = self.registers.get(Register::X);
+    let addr = self.get_operand_addr(mode);
 
-    self.memory.write(self.get_operand_addr(mode), a & x);
+    self.memory.write(addr, a & x);
   }
 
-  fn sbc(&mut self, mode: &Addressing) {
-    let val = self.memory.read(self.get_operand_addr(mode)).wrapping_neg().wrapping_sub(1);
+  fn sbc(&mut self, mode: Addressing) {
+    let addr = self.get_operand_addr(mode);
+    let val = self.memory.read(addr).wrapping_neg().wrapping_sub(1);
 
-    let raw_res = (self.registers.get(&Register::A) as u16)
-      .wrapping_add( if self.registers.get_flag(&Flag::Carry) { 1 } else { 0 })
+    let raw_res = (self.registers.get(Register::A) as u16)
+      .wrapping_add( if self.registers.get_flag(Flag::Carry) { 1 } else { 0 })
       .wrapping_add(val as u16);
 
     let res = raw_res as u8;
 
-    self.registers.set_flag(&Flag::Carry, (res as u16) < raw_res);
-    self.registers.set_flag(&Flag::Overflow,
-      (res ^ self.registers.get(&Register::A)) & (res ^ val) & 0x80 != 0
+    self.registers.set_flag(Flag::Carry, (res as u16) < raw_res);
+    self.registers.set_flag(Flag::Overflow,
+      (res ^ self.registers.get(Register::A)) & (res ^ val) & 0x80 != 0
     );
 
-    self.registers.set(&Register::A, res);
-    self.update_zero_negative(self.registers.get(&Register::A));
+    self.registers.set(Register::A, res);
+    self.update_zero_negative(self.registers.get(Register::A));
   }
 
   fn sbx(&mut self) {
-    let data_a = self.memory.read(self.get_operand_addr(&Addressing::Immediate));
-    let data_b = self.registers.get(&Register::A) & self.registers.get(&Register::X);
+    let addr = self.get_operand_addr(Addressing::Immediate);
+    let data_a = self.memory.read(addr);
+    let data_b = self.registers.get(Register::A) & self.registers.get(Register::X);
 
     let res = data_b.wrapping_sub(data_a);
 
-    self.registers.set_flag(&Flag::Carry, data_b <= data_a);
+    self.registers.set_flag(Flag::Carry, data_b <= data_a);
     self.update_zero_negative(res);
-    self.registers.set(&Register::X, res);
+    self.registers.set(Register::X, res);
   }
 
-  fn sha(&mut self, mode: &Addressing) {
+  fn sha(&mut self, mode: Addressing) {
     let addr = self.get_operand_addr(mode);
     self.memory.write(addr,
-      self.registers.get(&Register::A) & self.registers.get(&Register::X) & ((addr >> 8) as u8).wrapping_add(1));
+      self.registers.get(Register::A) & self.registers.get(Register::X) & ((addr >> 8) as u8).wrapping_add(1));
   }
 
   fn shx(&mut self) {
-    let addr = self.get_operand_addr(&Addressing::AbsoluteY);
-    let x = self.registers.get(&Register::X);
+    let addr = self.get_operand_addr(Addressing::AbsoluteY);
+    let x = self.registers.get(Register::X);
 
     self.memory.write(addr, x  & ((addr >> 8) as u8).wrapping_add(1));
   }
 
   fn shy(&mut self) {
-    let addr = self.get_operand_addr(&Addressing::AbsoluteY);
-    let y = self.registers.get(&Register::Y);
+    let addr = self.get_operand_addr(Addressing::AbsoluteY);
+    let y = self.registers.get(Register::Y);
 
     self.memory.write(addr, y  & ((addr >> 8) as u8).wrapping_add(1));
   }
 
-  fn slo(&mut self, mode: &Addressing) {
+  fn slo(&mut self, mode: Addressing) {
     self.asl(mode);
     self.ora(mode);
   }
 
-  fn sre(&mut self, mode: &Addressing) {
+  fn sre(&mut self, mode: Addressing) {
     self.lsr(mode);
     self.eor(mode);
   }
 
-  fn store_reg(&mut self, mode: &Addressing, reg: &Register) {
-    self.memory.write(self.get_operand_addr(mode), self.registers.get(reg));
+  fn store_reg(&mut self, mode: Addressing, reg: Register) {
+    let addr = self.get_operand_addr(mode);
+    self.memory.write(addr, self.registers.get(reg));
   }
 
   fn tas(&mut self) {
-    let a = self.registers.get(&Register::A);
-    let x = self.registers.get(&Register::X);
-    let addr = self.get_operand_addr(&Addressing::AbsoluteY);
+    let a = self.registers.get(Register::A);
+    let x = self.registers.get(Register::X);
+    let addr = self.get_operand_addr(Addressing::AbsoluteY);
 
 
-    self.registers.set(&Register::SP, a & x);
+    self.registers.set(Register::SP, a & x);
     self.memory.write(addr, a & x & ((addr >> 8) as u8).wrapping_add(1));
   }
 
-  fn transfer_reg(&mut self, from: &Register, to: &Register) {
+  fn transfer_reg(&mut self, from: Register, to: Register) {
     self.registers.set(to, self.registers.get(from));
     self.update_zero_negative(self.registers.get(to));
   }

@@ -1,6 +1,8 @@
 pub mod memory;
 pub mod cpu;
 pub mod trace;
+pub mod ppu;
+pub mod utils;
 
 // use sdl2::event::Event;
 // use sdl2::EventPump;
@@ -12,7 +14,7 @@ pub mod trace;
 // use rand::Rng;
 
 use cpu::CPU;
-use memory::rom::ROM;
+use memory::cartridge::Cartridge;
 use trace::trace;
 
 fn main() {
@@ -31,11 +33,11 @@ fn main() {
     // let mut texture = creator
     //     .create_texture(PixelFormatEnum::RGB24, TextureAccess::Static,32, 32).unwrap();
 
-    // let mut frame = [0 as u8; 32 * 32 * 3];
+    // let mut frame = [0u8; 32 * 32 * 3];
     // let mut rng = rand::thread_rng();
 
 
-    let rom = ROM::new(&std::fs::read("nestest.nes").unwrap()).unwrap();
+    let rom = Cartridge::new(&std::fs::read("nestest.nes").unwrap()).unwrap();
     let mut cpu = CPU::new(rom);
 
     cpu.start(move |cpu| {

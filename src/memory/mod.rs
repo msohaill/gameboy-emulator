@@ -1,25 +1,25 @@
 pub mod bus;
-pub mod rom;
+pub mod cartridge;
 
 use bus::Bus;
-use rom::ROM;
+use cartridge::Cartridge;
 
 pub struct Memory {
   bus: Bus,
 }
 
 impl Memory {
-  pub fn new(cartridge: ROM) -> Self {
+  pub fn new(cartridge: Cartridge) -> Self {
     Memory {
       bus: Bus::new(cartridge),
     }
   }
 
-  pub fn read(&self, addr: u16) -> u8 {
+  pub fn read(&mut self, addr: u16) -> u8 {
     self.bus.read(addr)
   }
 
-  pub fn readu16(&self, addr: u16) -> u16 {
+  pub fn readu16(&mut self, addr: u16) -> u16 {
     self.bus.readu16(addr)
   }
 

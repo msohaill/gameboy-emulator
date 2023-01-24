@@ -1,0 +1,10 @@
+crate::utils::bitflag!(pub Mask,
+  Greyscale,
+  ShowLeftBackground,
+  ShowLeftSprites,
+  ShowBackground,
+  ShowSprites,
+  EmphasisRed,
+  EmphasisGreen,
+  EmphasisBlue,
+);

@@ -1,5 +1,6 @@
 use std::fmt::{Debug, Display, Formatter, Result};
 
+#[derive(Clone, Copy)]
 pub enum Addressing {
   Immediate, ZeroPage, ZeroPageX, ZeroPageY, Absolute, AbsoluteIndirect,
   AbsoluteX, AbsoluteY, IndirectX, IndirectY, Implied,

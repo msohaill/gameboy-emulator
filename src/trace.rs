@@ -1,6 +1,6 @@
-use super::cpu::CPU;
-use super::cpu::instruction::{Addressing, Instruction};
-use super::cpu::register::Register;
+use crate::cpu::CPU;
+use crate::cpu::instruction::{Addressing, Instruction};
+use crate::cpu::register::Register;
 
 pub fn trace(cpu: &mut CPU) -> String {
   let start = cpu.registers.get_pc();
@@ -15,7 +15,7 @@ pub fn trace(cpu: &mut CPU) -> String {
     Addressing::Immediate | Addressing::Implied => (0, 0),
     _ => {
       cpu.registers.set_pc(cpu.registers.get_pc().wrapping_add(1));
-      let addr = cpu.get_operand_addr(&instruction.mode);
+      let addr = cpu.get_operand_addr(instruction.mode);
       cpu.registers.set_pc(cpu.registers.get_pc().wrapping_sub(1));
       (addr, cpu.memory.read(addr))
     },
@@ -41,8 +41,8 @@ pub fn trace(cpu: &mut CPU) -> String {
         Addressing::ZeroPage => format!("${:02x} = {:02x}", memory_addr, stored_value),
         Addressing::ZeroPageX => format!("${:02x},X @ {:02x} = {:02x}", addr, memory_addr, stored_value),
         Addressing::ZeroPageY => format!("${:02x},Y @ {:02x} = {:02x}", addr, memory_addr, stored_value),
-        Addressing::IndirectX => format!("(${:02x},X) @ {:02x} = {:04x} = {:02x}", addr, (addr.wrapping_add(cpu.registers.get(&Register::X))), memory_addr, stored_value),
-        Addressing::IndirectY => format!("(${:02x}),Y = {:04x} @ {:04x} = {:02x}", addr, (memory_addr.wrapping_sub(cpu.registers.get(&Register::Y) as u16)), memory_addr, stored_value),
+        Addressing::IndirectX => format!("(${:02x},X) @ {:02x} = {:04x} = {:02x}", addr, (addr.wrapping_add(cpu.registers.get(Register::X))), memory_addr, stored_value),
+        Addressing::IndirectY => format!("(${:02x}),Y = {:04x} @ {:04x} = {:02x}", addr, (memory_addr.wrapping_sub(cpu.registers.get(Register::Y) as u16)), memory_addr, stored_value),
         _ => panic!("unexpected addressing mode"),
       }
     }
@@ -91,7 +91,7 @@ pub fn trace(cpu: &mut CPU) -> String {
 
     format!(
         "{:47} A:{:02x} X:{:02x} Y:{:02x} P:{:02x} SP:{:02x}",
-        asm_str, cpu.registers.get(&Register::A), cpu.registers.get(&Register::X), cpu.registers.get(&Register::Y), cpu.registers.get(&Register::P), cpu.registers.get(&Register::SP),
+        asm_str, cpu.registers.get(Register::A), cpu.registers.get(Register::X), cpu.registers.get(Register::Y), cpu.registers.get(Register::P), cpu.registers.get(Register::SP),
     )
     .to_ascii_uppercase()
 }
