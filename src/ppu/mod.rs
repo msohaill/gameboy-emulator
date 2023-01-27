@@ -1,6 +1,7 @@
 pub mod register;
 
-use crate::memory::{cartridge::Mirroring, bus::Bus};
+use crate::bus::Bus;
+use crate::bus::cartridge::Mirroring;
 use register::Registers;
 
 use register::status::Flag as StatusFlag;

@@ -1,4 +1,4 @@
-use crate::memory::bus::Bus;
+use crate::bus::Bus;
 
 pub struct Address {
   value: u16,

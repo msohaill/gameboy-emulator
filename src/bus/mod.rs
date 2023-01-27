@@ -1,8 +1,12 @@
+pub mod memory;
+pub mod cartridge;
+
 use crate::ppu::PPU;
-use super::cartridge::Cartridge;
+use cartridge::Cartridge;
+use memory::Memory;
 
 pub struct Bus {
-  vram: [u8; 2048],
+  memory: Memory,
   prg: Vec<u8>,
   ppu: PPU,
 }
@@ -17,7 +21,7 @@ impl Bus {
 
   pub fn new(cartridge: Cartridge) -> Self {
     Bus {
-      vram: [0; 2048],
+      memory: Memory::new(),
       prg: cartridge.prg,
       ppu: PPU::new(cartridge.chr, cartridge.mirroring),
     }
@@ -25,7 +29,7 @@ impl Bus {
 
   pub fn read(&mut self, addr: u16) -> u8 {
     match addr {
-      Bus::RAM  ..=   Bus::RAM_END => self.vram[(addr & 0x7FF) as usize],
+      Bus::RAM  ..=   Bus::RAM_END => self.memory.read(addr),
       Bus::PPU  ..=   Bus::PPU_END => self.ppu.read(addr),
       Bus::ROM  ..=   Bus::ROM_END => self.read_prg(addr),
       _ => {
@@ -37,7 +41,7 @@ impl Bus {
 
   pub fn write(&mut self, addr: u16, data: u8) {
     match addr {
-      Bus::RAM ..= Bus::RAM_END => self.vram[(addr & ((1 << 11) - 1)) as usize] = data,
+      Bus::RAM ..= Bus::RAM_END => self.memory.write(addr, data),
       Bus::PPU ..= Bus::PPU_END => self.ppu.write(addr, data),
       Bus::ROM..=Bus::ROM_END => panic!("Attempting to write to cartridge ROM."),
       _ => println!("Ignoring write: {:#0X}", addr),

@@ -4,7 +4,7 @@ use crate::cpu::register::Register;
 
 pub fn trace(cpu: &mut CPU) -> String {
   let start = cpu.registers.get_pc();
-  let code = cpu.memory.read(start);
+  let code = cpu.bus.read(start);
 
   let instruction = Instruction::get(code);
 
@@ -17,7 +17,7 @@ pub fn trace(cpu: &mut CPU) -> String {
       cpu.registers.set_pc(cpu.registers.get_pc().wrapping_add(1));
       let addr = cpu.get_operand_addr(instruction.mode);
       cpu.registers.set_pc(cpu.registers.get_pc().wrapping_sub(1));
-      (addr, cpu.memory.read(addr))
+      (addr, cpu.bus.read(addr))
     },
   };
 
@@ -27,7 +27,7 @@ pub fn trace(cpu: &mut CPU) -> String {
       _ => String::from(""),
     },
     2 => {
-      let addr: u8 = cpu.memory.read(start + 1);
+      let addr: u8 = cpu.bus.read(start + 1);
       hex_dump.push(addr);
 
       match instruction.mode {
@@ -47,12 +47,12 @@ pub fn trace(cpu: &mut CPU) -> String {
       }
     }
     3 => {
-      let address_lo = cpu.memory.read(start + 1);
-      let address_hi = cpu.memory.read(start + 2);
+      let address_lo = cpu.bus.read(start + 1);
+      let address_hi = cpu.bus.read(start + 2);
       hex_dump.push(address_lo);
       hex_dump.push(address_hi);
 
-      let address = cpu.memory.readu16(start + 1);
+      let address = cpu.bus.readu16(start + 1);
 
       match instruction.mode {
         Addressing::Absolute => {
@@ -66,11 +66,11 @@ pub fn trace(cpu: &mut CPU) -> String {
         Addressing::AbsoluteY => format!("${:04x},Y @ {:04x} = {:02x}", address, memory_addr, stored_value),
         Addressing::AbsoluteIndirect => {
           let jmp_addr = if address & 0x00FF == 0x00FF {
-            let lo = cpu.memory.read(address);
-            let hi = cpu.memory.read(address & 0xFF00);
+            let lo = cpu.bus.read(address);
+            let hi = cpu.bus.read(address & 0xFF00);
             (hi as u16) << 8 | (lo as u16)
           } else {
-            cpu.memory.readu16(address)
+            cpu.bus.readu16(address)
           };
           format!("(${:04x}) = {:04x}", address, jmp_addr)
         }

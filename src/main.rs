@@ -1,4 +1,4 @@
-pub mod memory;
+pub mod bus;
 pub mod cpu;
 pub mod trace;
 pub mod ppu;
@@ -14,7 +14,7 @@ pub mod utils;
 // use rand::Rng;
 
 use cpu::CPU;
-use memory::cartridge::Cartridge;
+use bus::cartridge::Cartridge;
 use trace::trace;
 
 fn main() {
@@ -37,7 +37,7 @@ fn main() {
     // let mut rng = rand::thread_rng();
 
 
-    let rom = Cartridge::new(&std::fs::read("nestest.nes").unwrap()).unwrap();
+    let rom = Cartridge::new(&std::fs::read("dev/nestest.nes").unwrap()).unwrap();
     let mut cpu = CPU::new(rom);
 
     cpu.start(move |cpu| {
