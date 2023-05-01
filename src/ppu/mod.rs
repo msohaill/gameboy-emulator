@@ -1,7 +1,7 @@
 pub mod register;
 
-use crate::bus::Bus;
 use crate::bus::cartridge::Mirroring;
+use crate::bus::Bus;
 use register::Registers;
 
 use register::controller::Flag as ControllerFlag;
@@ -14,6 +14,7 @@ pub struct PPU {
   pub oam: [u8; 0x100],
   pub mirroring: Mirroring,
   pub registers: Registers,
+  pub nmi_interrupt: bool,
   cycles: usize,
   data_buffer: u8,
   scanline: u16,
@@ -28,6 +29,7 @@ impl PPU {
       vram: [0; 0x800],
       oam: [0; 0x100],
       registers: Registers::new(),
+      nmi_interrupt: false,
       cycles: 0,
       data_buffer: 0,
       scanline: 0,
@@ -36,8 +38,9 @@ impl PPU {
 
   pub fn read(&mut self, addr: u16) -> u8 {
     match addr {
-      0x2000 | 0x2001 | 0x2003 | 0x2005 | 0x2006 | 0x4014 =>
-        panic!("Illegal access at write-only PPU register: {:#0X}", addr),
+      0x2000 | 0x2001 | 0x2003 | 0x2005 | 0x2006 | 0x4014 => {
+        panic!("Illegal access at write-only PPU register: {:#0X}", addr)
+      }
       0x2002 => self.read_status(),
       0x2004 => self.read_oam_data(),
       0x2007 => self.read_data(),
@@ -48,7 +51,16 @@ impl PPU {
 
   pub fn write(&mut self, addr: u16, data: u8) {
     match addr {
-      0x2000 => self.registers.controller.set(data),
+      0x2000 => {
+        let nmi_gen = self.registers.controller.get_flag(ControllerFlag::NMIGen);
+        self.registers.controller.set(data);
+        if !nmi_gen
+          && self.registers.controller.get_flag(ControllerFlag::NMIGen)
+          && self.registers.status.get_flag(StatusFlag::VBLankStarted)
+        {
+          self.nmi_interrupt = true;
+        }
+      }
       0x2001 => self.registers.mask.set(data),
       0x2002 => panic!("Illegal write to PPU status register."),
       0x2003 => self.registers.write_oam_addr(data),
@@ -68,13 +80,21 @@ impl PPU {
       self.cycles -= 341;
       self.scanline += 1;
 
-      if self.scanline == 241 && self.registers.controller.get_flag(ControllerFlag::NMIGen) {
+      if self.scanline == 241 {
         self.registers.status.set_flag(StatusFlag::VBLankStarted);
-        todo!("Triger NMI interrupt");
+        self.registers.status.unset_flag(StatusFlag::SpriteZeroHit);
+
+        if self.registers.controller.get_flag(ControllerFlag::NMIGen) {
+          self.nmi_interrupt = true;
+        }
       }
+
 
       if self.scanline == 262 {
         self.scanline = 0;
+        self.nmi_interrupt = false;
+
+        self.registers.status.unset_flag(StatusFlag::SpriteZeroHit);
         self.registers.status.unset_flag(StatusFlag::VBLankStarted);
 
         return true;
@@ -86,27 +106,39 @@ impl PPU {
 
   fn read_data(&mut self) -> u8 {
     let addr = self.registers.address.read();
-    self.registers.address.increment(self.registers.controller.vram_increment());
+    self
+      .registers
+      .address
+      .increment(self.registers.controller.vram_increment());
 
     match addr {
-      0x0     ..=   0x1FFF => self.chr_read(addr),
-      0x2000  ..=   0x2FFF => self.vram_read(addr),
-      0x3000  ..=   0x3EFF => panic!("Address space 0x3000..0x3EFF is not expected to be used. Requested = {:#0X} ", addr),
-      0x3F00  ..=   0x3FFF => self.palette_read(addr),
-      _                    => panic!("Unexpected access to mirrored space {}", addr),
+      0x0..=0x1FFF => self.chr_read(addr),
+      0x2000..=0x2FFF => self.vram_read(addr),
+      0x3000..=0x3EFF => panic!(
+        "Address space 0x3000..0x3EFF is not expected to be used. Requested = {:#0X} ",
+        addr
+      ),
+      0x3F00..=0x3FFF => self.palette_read(addr),
+      _ => panic!("Unexpected access to mirrored space {}", addr),
     }
   }
 
   fn write_data(&mut self, data: u8) {
     let addr = self.registers.address.read();
-    self.registers.address.increment(self.registers.controller.vram_increment());
+    self
+      .registers
+      .address
+      .increment(self.registers.controller.vram_increment());
 
     match addr {
-      0x0     ..=   0x1FFF => panic!("Illegal write to CHR ROM: {:#0X}", addr),
-      0x2000  ..=   0x2FFF => self.vram_write(addr, data),
-      0x3000  ..=   0x3EFF => panic!("Address space 0x3000..0x3EFF is not expected to be used. Requested = {:#0X} ", addr),
-      0x3F00  ..=   0x3FFF => self.palette_write(addr, data),
-      _                    => panic!("Unexpected access to mirrored space {}", addr),
+      0x0..=0x1FFF => panic!("Illegal write to CHR ROM: {:#0X}", addr),
+      0x2000..=0x2FFF => self.vram_write(addr, data),
+      0x3000..=0x3EFF => panic!(
+        "Address space 0x3000..0x3EFF is not expected to be used. Requested = {:#0X} ",
+        addr
+      ),
+      0x3F00..=0x3FFF => self.palette_write(addr, data),
+      _ => panic!("Unexpected access to mirrored space {}", addr),
     };
   }
 
@@ -129,16 +161,16 @@ impl PPU {
   fn palette_read(&self, addr: u16) -> u8 {
     match addr {
       0x3F10 | 0x3F14 | 0x3F18 | 0x3F1C => self.palette[(addr - 0x10 - 0x3F00) as usize],
-      0x3F00    ..=   0x3FFF            => self.palette[(addr - 0x3F00) as usize],
-      _                                 => panic!("Illegal pallette table write: {:#0X}", addr),
+      0x3F00..=0x3FFF => self.palette[(addr - 0x3F00) as usize],
+      _ => panic!("Illegal pallette table write: {:#0X}", addr),
     }
   }
 
   fn palette_write(&mut self, addr: u16, data: u8) {
     match addr {
       0x3F10 | 0x3F14 | 0x3F18 | 0x3F1C => self.palette[(addr - 0x10 - 0x3F00) as usize] = data,
-      0x3F00    ..=   0x3FFF            => self.palette[(addr - 0x3F00) as usize] = data,
-      _                                 => panic!("Illegal pallette table access: {:#0X}", addr),
+      0x3F00..=0x3FFF => self.palette[(addr - 0x3F00) as usize] = data,
+      _ => panic!("Illegal pallette table access: {:#0X}", addr),
     }
   }
 
@@ -161,7 +193,9 @@ impl PPU {
 
   fn write_oam_data(&mut self, data: u8) {
     self.oam[self.registers.oam_address as usize] = data;
-    self.registers.write_oam_addr(self.registers.oam_address.wrapping_add(1));
+    self
+      .registers
+      .write_oam_addr(self.registers.oam_address.wrapping_add(1));
   }
 
   fn read_status(&mut self) -> u8 {

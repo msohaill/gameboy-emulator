@@ -1,5 +1,5 @@
-pub mod memory;
 pub mod cartridge;
+pub mod memory;
 
 use crate::ppu::PPU;
 use cartridge::Cartridge;
@@ -31,20 +31,20 @@ impl Bus {
 
   pub fn read(&mut self, addr: u16) -> u8 {
     match addr {
-      Bus::RAM  ..=   Bus::RAM_END => self.memory.read(addr),
-      Bus::PPU  ..=   Bus::PPU_END => self.ppu.read(addr),
-      Bus::ROM  ..=   Bus::ROM_END => self.read_prg(addr),
+      Bus::RAM..=Bus::RAM_END => self.memory.read(addr),
+      Bus::PPU..=Bus::PPU_END => self.ppu.read(addr),
+      Bus::ROM..=Bus::ROM_END => self.read_prg(addr),
       _ => {
         println!("Ignoring read: {:#0X}", addr);
         0
-      },
+      }
     }
   }
 
   pub fn write(&mut self, addr: u16, data: u8) {
     match addr {
-      Bus::RAM ..= Bus::RAM_END => self.memory.write(addr, data),
-      Bus::PPU ..= Bus::PPU_END => self.ppu.write(addr, data),
+      Bus::RAM..=Bus::RAM_END => self.memory.write(addr, data),
+      Bus::PPU..=Bus::PPU_END => self.ppu.write(addr, data),
       Bus::ROM..=Bus::ROM_END => panic!("Attempting to write to cartridge ROM."),
       _ => println!("Ignoring write: {:#0X}", addr),
     }
@@ -70,7 +70,13 @@ impl Bus {
 
   fn read_prg(&self, addr: u16) -> u8 {
     let mut index = addr - Bus::ROM;
-    if self.prg.len() == 0x4000 && index >= 0x4000 { index = index % 0x4000 }
+    if self.prg.len() == 0x4000 && index >= 0x4000 {
+      index = index % 0x4000
+    }
     self.prg[index as usize]
+  }
+
+  pub fn poll_nmi(&self) -> bool {
+    self.ppu.nmi_interrupt
   }
 }

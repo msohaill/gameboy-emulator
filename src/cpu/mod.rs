@@ -1,11 +1,12 @@
-pub mod register;
 pub mod instruction;
+pub mod interrupt;
+pub mod register;
 
-use crate::bus::Bus;
 use crate::bus::cartridge::Cartridge;
+use crate::bus::Bus;
 use instruction::{Addressing, Instruction, OpCode, Operand};
+use interrupt::{Interrupt, NMI, BRK};
 use register::{Flag, Register, Registers};
-
 
 pub struct CPU {
   pub registers: Registers,
@@ -42,8 +43,14 @@ impl CPU {
       panic!("Attempted to store beyone stack capacity.");
     }
 
-    self.bus.write(CPU::STACK_START.wrapping_add(self.registers.get(Register::SP) as u16), data);
-    self.registers.set(Register::SP, self.registers.get(Register::SP).wrapping_sub(1));
+    self.bus.write(
+      CPU::STACK_START.wrapping_add(self.registers.get(Register::SP) as u16),
+      data,
+    );
+    self.registers.set(
+      Register::SP,
+      self.registers.get(Register::SP).wrapping_sub(1),
+    );
   }
 
   fn stack_pop(&mut self) -> u8 {
@@ -51,8 +58,13 @@ impl CPU {
       panic!("Attempted to pop empty stack");
     }
 
-    self.registers.set(Register::SP, self.registers.get(Register::SP).wrapping_add(1));
-    self.bus.read(CPU::STACK_START.wrapping_add(self.registers.get(Register::SP) as u16))
+    self.registers.set(
+      Register::SP,
+      self.registers.get(Register::SP).wrapping_add(1),
+    );
+    self
+      .bus
+      .read(CPU::STACK_START.wrapping_add(self.registers.get(Register::SP) as u16))
   }
 
   fn stack_pushu16(&mut self, data: u16) {
@@ -71,7 +83,33 @@ impl CPU {
   }
 
   fn increment_pc(&mut self, i: u16) {
-    self.registers.set_pc(self.registers.get_pc().wrapping_add(i));
+    self
+      .registers
+      .set_pc(self.registers.get_pc().wrapping_add(i));
+  }
+
+  fn interrupt(&mut self, interrupt: Interrupt) {
+    if self.registers.get_flag(Flag::InterruptDisable) && (interrupt == BRK) {
+      return;
+    }
+
+    self
+      .registers
+      .change_flag(Flag::B1, interrupt.mask & 0b00010000 == 0b00010000);
+    self
+      .registers
+      .change_flag(Flag::B2, interrupt.mask & 0b00100000 == 0b00100000);
+
+    self.stack_pushu16(self.registers.get_pc());
+    self.stack_push(self.registers.get(Register::P));
+
+    self.registers.set_flag(Flag::InterruptDisable);
+
+    self.bus.tick(interrupt.cycles);
+
+    self
+      .registers
+      .set_pc(self.bus.readu16(interrupt.read_address));
   }
 
   fn run<F>(&mut self, mut callback: F)
@@ -79,6 +117,10 @@ impl CPU {
     F: FnMut(&mut CPU),
   {
     loop {
+      if self.bus.poll_nmi() {
+        self.interrupt(NMI);
+      }
+
       callback(self);
 
       let instruction = Instruction::get(self.bus.read(self.registers.get_pc()));
@@ -86,8 +128,6 @@ impl CPU {
       let current_pc = self.registers.get_pc();
 
       let cycles = self.execute_instr(&instruction);
-
-      if cycles == 0 { return };
 
       self.bus.tick(cycles);
 
@@ -127,7 +167,7 @@ impl CPU {
 
       OpCode::BPL => self.branch(!self.registers.get_flag(Flag::Negative)),
 
-      OpCode::BRK => 0,// 7,
+      OpCode::BRK => self.brk(), // 7,
 
       OpCode::BVC => self.branch(!self.registers.get_flag(Flag::Overflow)),
 
@@ -275,20 +315,22 @@ impl CPU {
       Addressing::Implied => Operand(0, 0, 0),
       Addressing::Indirect => {
         let base_addr = self.bus.readu16(self.registers.get_pc());
-        let addr =
-          if base_addr & 0x00FF == 0x00FF {
-            let lo = self.bus.read(base_addr) as u16;
-            let hi = self.bus.read(base_addr & 0xFF00) as u16;
+        let addr = if base_addr & 0x00FF == 0x00FF {
+          let lo = self.bus.read(base_addr) as u16;
+          let hi = self.bus.read(base_addr & 0xFF00) as u16;
 
-            (hi << 8) | lo
-          } else {
-            self.bus.readu16(base_addr)
-          };
+          (hi << 8) | lo
+        } else {
+          self.bus.readu16(base_addr)
+        };
 
         Operand(addr, 5, 0)
       }
       Addressing::IndirectX => {
-        let fetch_addr = self.bus.read(self.registers.get_pc()).wrapping_add(self.registers.get(Register::X));
+        let fetch_addr = self
+          .bus
+          .read(self.registers.get_pc())
+          .wrapping_add(self.registers.get(Register::X));
         let lo = self.bus.read(fetch_addr as u16) as u16;
         let hi = self.bus.read(fetch_addr.wrapping_add(1) as u16) as u16;
         let addr = (hi << 8) | lo;
@@ -314,10 +356,22 @@ impl CPU {
         Operand(addr, 2, additional_cyc)
       }
       Addressing::ZeroPage => Operand(self.bus.read(self.registers.get_pc()) as u16, 2, 0),
-      Addressing::ZeroPageX =>
-        Operand(self.bus.read(self.registers.get_pc()).wrapping_add(self.registers.get(Register::X)) as u16, 3, 0),
-      Addressing::ZeroPageY =>
-        Operand(self.bus.read(self.registers.get_pc()).wrapping_add(self.registers.get(Register::Y)) as u16, 3, 0),
+      Addressing::ZeroPageX => Operand(
+        self
+          .bus
+          .read(self.registers.get_pc())
+          .wrapping_add(self.registers.get(Register::X)) as u16,
+        3,
+        0,
+      ),
+      Addressing::ZeroPageY => Operand(
+        self
+          .bus
+          .read(self.registers.get_pc())
+          .wrapping_add(self.registers.get(Register::Y)) as u16,
+        3,
+        0,
+      ),
     }
   }
 
@@ -325,7 +379,9 @@ impl CPU {
     match mode {
       Addressing::Accumulator => (self.get_operand_addr(mode), self.registers.get(Register::A)),
 
-      Addressing::Implied | Addressing::Indirect | Addressing::Relative=> (self.get_operand_addr(mode), 0),
+      Addressing::Implied | Addressing::Indirect | Addressing::Relative => {
+        (self.get_operand_addr(mode), 0)
+      }
       _ => {
         let Operand(addr, cyc, additional_cyc) = self.get_operand_addr(mode);
         (Operand(addr, cyc, additional_cyc), self.bus.read(addr))
@@ -335,21 +391,30 @@ impl CPU {
 
   fn update_zero_negative(&mut self, res: u8) {
     self.registers.change_flag(Flag::Zero, res == 0);
-    self.registers.change_flag(Flag::Negative, (res >> 7) & 0b1 != 0);
+    self
+      .registers
+      .change_flag(Flag::Negative, (res >> 7) & 0b1 != 0);
   }
 
   fn adc(&mut self, mode: Addressing) -> u8 {
     let (Operand(_, cyc, additional_cyc), val) = self.get_operand(mode);
 
     let raw_res = (self.registers.get(Register::A) as u16)
-      .wrapping_add( if self.registers.get_flag(Flag::Carry) { 1 } else { 0 })
+      .wrapping_add(if self.registers.get_flag(Flag::Carry) {
+        1
+      } else {
+        0
+      })
       .wrapping_add(val as u16);
 
     let res = raw_res as u8;
 
-    self.registers.change_flag(Flag::Carry, (res as u16) < raw_res);
-    self.registers.change_flag(Flag::Overflow,
-      (res ^ self.registers.get(Register::A)) & (res ^ val) & 0x80 != 0
+    self
+      .registers
+      .change_flag(Flag::Carry, (res as u16) < raw_res);
+    self.registers.change_flag(
+      Flag::Overflow,
+      (res ^ self.registers.get(Register::A)) & (res ^ val) & 0x80 != 0,
     );
 
     self.registers.set(Register::A, res);
@@ -371,7 +436,10 @@ impl CPU {
     let Operand(_, cyc, _) = self.get_operand_addr(Addressing::Immediate);
 
     self.and(Addressing::Immediate);
-    self.registers.change_flag(Flag::Carry, (self.registers.get(Register::A) >> 7) & 0b1 != 0);
+    self.registers.change_flag(
+      Flag::Carry,
+      (self.registers.get(Register::A) >> 7) & 0b1 != 0,
+    );
 
     1 + cyc
   }
@@ -379,7 +447,9 @@ impl CPU {
   fn and(&mut self, mode: Addressing) -> u8 {
     let (Operand(_, cyc, additional_cyc), byte) = self.get_operand(mode);
 
-    self.registers.set(Register::A, self.registers.get(Register::A) & byte);
+    self
+      .registers
+      .set(Register::A, self.registers.get(Register::A) & byte);
     self.update_zero_negative(self.registers.get(Register::A));
 
     1 + cyc + additional_cyc
@@ -414,7 +484,9 @@ impl CPU {
   fn asl(&mut self, mode: Addressing) -> u8 {
     let (Operand(addr, cyc, _), data) = self.get_operand(mode);
 
-    self.registers.change_flag(Flag::Carry, (data >> 7) & 0b1 != 0);
+    self
+      .registers
+      .change_flag(Flag::Carry, (data >> 7) & 0b1 != 0);
     self.update_zero_negative(data << 1);
 
     match mode {
@@ -426,7 +498,7 @@ impl CPU {
         self.bus.write(addr, data << 1);
         4 + cyc
       }
-       _ => {
+      _ => {
         self.bus.write(addr, data << 1);
         3 + cyc
       }
@@ -436,9 +508,15 @@ impl CPU {
   fn bit(&mut self, mode: Addressing) -> u8 {
     let (Operand(_, cyc, _), data) = self.get_operand(mode);
 
-    self.registers.change_flag(Flag::Zero, data & self.registers.get(Register::A) == 0);
-    self.registers.change_flag(Flag::Overflow, (data >> 6) & 0b1 != 0);
-    self.registers.change_flag(Flag::Negative, (data >> 7) & 0b1 != 0);
+    self
+      .registers
+      .change_flag(Flag::Zero, data & self.registers.get(Register::A) == 0);
+    self
+      .registers
+      .change_flag(Flag::Overflow, (data >> 6) & 0b1 != 0);
+    self
+      .registers
+      .change_flag(Flag::Negative, (data >> 7) & 0b1 != 0);
 
     1 + cyc
   }
@@ -452,6 +530,12 @@ impl CPU {
       self.registers.set_pc(addr);
       1 + cyc + additional_cyc
     }
+  }
+
+  fn brk(&mut self) -> u8 {
+    self.increment_pc(1);
+    self.interrupt(BRK);
+    7
   }
 
   fn clear(&mut self, flag: Flag) -> u8 {
@@ -477,7 +561,7 @@ impl CPU {
 
     match mode {
       Addressing::AbsoluteX | Addressing::AbsoluteY | Addressing::IndirectY => 4 + cyc,
-      _ => 3 + cyc
+      _ => 3 + cyc,
     }
   }
 
@@ -489,12 +573,14 @@ impl CPU {
 
     match mode {
       Addressing::AbsoluteX => 4 + cyc,
-      _ => 3 + cyc
+      _ => 3 + cyc,
     }
   }
 
   fn decrement_reg(&mut self, reg: Register) -> u8 {
-    self.registers.set(reg, self.registers.get(reg).wrapping_sub(1));
+    self
+      .registers
+      .set(reg, self.registers.get(reg).wrapping_sub(1));
     self.update_zero_negative(self.registers.get(reg));
     2
   }
@@ -502,7 +588,9 @@ impl CPU {
   fn eor(&mut self, mode: Addressing) -> u8 {
     let (Operand(_, cyc, additional_cyc), byte) = self.get_operand(mode);
 
-    self.registers.set(Register::A, self.registers.get(Register::A) ^ byte);
+    self
+      .registers
+      .set(Register::A, self.registers.get(Register::A) ^ byte);
     self.update_zero_negative(self.registers.get(Register::A));
 
     1 + cyc + additional_cyc
@@ -516,12 +604,14 @@ impl CPU {
 
     match mode {
       Addressing::AbsoluteX => 4 + cyc,
-      _ => 3 + cyc
+      _ => 3 + cyc,
     }
   }
 
   fn increment_reg(&mut self, reg: Register) -> u8 {
-    self.registers.set(reg, self.registers.get(reg).wrapping_add(1));
+    self
+      .registers
+      .set(reg, self.registers.get(reg).wrapping_add(1));
     self.update_zero_negative(self.registers.get(reg));
     2
   }
@@ -534,7 +624,7 @@ impl CPU {
 
     match mode {
       Addressing::AbsoluteX | Addressing::AbsoluteY | Addressing::IndirectY => 4 + cyc,
-      _ => 3 + cyc
+      _ => 3 + cyc,
     }
   }
 
@@ -597,7 +687,7 @@ impl CPU {
         self.bus.write(addr, data >> 1);
         4 + cyc
       }
-       _ => {
+      _ => {
         self.bus.write(addr, data >> 1);
         3 + cyc
       }
@@ -627,7 +717,9 @@ impl CPU {
   fn ora(&mut self, mode: Addressing) -> u8 {
     let (Operand(_, cyc, additional_cyc), byte) = self.get_operand(mode);
 
-    self.registers.set(Register::A, self.registers.get(Register::A) | byte);
+    self
+      .registers
+      .set(Register::A, self.registers.get(Register::A) | byte);
     self.update_zero_negative(self.registers.get(Register::A));
 
     1 + cyc + additional_cyc
@@ -665,7 +757,7 @@ impl CPU {
 
     match mode {
       Addressing::AbsoluteX | Addressing::AbsoluteY | Addressing::IndirectY => 4 + cyc,
-      _ => 3 + cyc
+      _ => 3 + cyc,
     }
   }
 
@@ -673,7 +765,9 @@ impl CPU {
     let (Operand(addr, cyc, _), data) = self.get_operand(mode);
 
     let prev_carry = self.registers.get_flag(Flag::Carry);
-    self.registers.change_flag(Flag::Carry, (data >> 7) & 0b1 != 0);
+    self
+      .registers
+      .change_flag(Flag::Carry, (data >> 7) & 0b1 != 0);
 
     let res = (data << 1) | if prev_carry { 1 } else { 0 };
     self.update_zero_negative(res);
@@ -703,7 +797,6 @@ impl CPU {
     let res = (data >> 1) | if prev_carry { 1 << 7 } else { 0 };
     self.update_zero_negative(res);
 
-
     match mode {
       Addressing::Accumulator => {
         self.registers.set(Register::A, res);
@@ -728,13 +821,15 @@ impl CPU {
 
     match mode {
       Addressing::AbsoluteX | Addressing::AbsoluteY | Addressing::IndirectY => 4 + cyc,
-      _ => 3 + cyc
+      _ => 3 + cyc,
     }
   }
 
   fn rti(&mut self) -> u8 {
     let status = self.stack_pop();
-    self.registers.set(Register::P, (status | (1 << 5)) & !(1 << 4));
+    self
+      .registers
+      .set(Register::P, (status | (1 << 5)) & !(1 << 4));
 
     let pc = self.stack_popu16();
     self.registers.set_pc(pc);
@@ -765,14 +860,21 @@ impl CPU {
     let val = base_val.wrapping_neg().wrapping_sub(1);
 
     let raw_res = (self.registers.get(Register::A) as u16)
-      .wrapping_add( if self.registers.get_flag(Flag::Carry) { 1 } else { 0 })
+      .wrapping_add(if self.registers.get_flag(Flag::Carry) {
+        1
+      } else {
+        0
+      })
       .wrapping_add(val as u16);
 
     let res = raw_res as u8;
 
-    self.registers.change_flag(Flag::Carry, (res as u16) < raw_res);
-    self.registers.change_flag(Flag::Overflow,
-      (res ^ self.registers.get(Register::A)) & (res ^ val) & 0x80 != 0
+    self
+      .registers
+      .change_flag(Flag::Carry, (res as u16) < raw_res);
+    self.registers.change_flag(
+      Flag::Overflow,
+      (res ^ self.registers.get(Register::A)) & (res ^ val) & 0x80 != 0,
     );
 
     self.registers.set(Register::A, res);
@@ -801,8 +903,12 @@ impl CPU {
 
   fn sha(&mut self, mode: Addressing) -> u8 {
     let Operand(addr, cyc, _) = self.get_operand_addr(mode);
-    self.bus.write(addr,
-      self.registers.get(Register::A) & self.registers.get(Register::X) & ((addr >> 8) as u8).wrapping_add(1));
+    self.bus.write(
+      addr,
+      self.registers.get(Register::A)
+        & self.registers.get(Register::X)
+        & ((addr >> 8) as u8).wrapping_add(1),
+    );
 
     2 + cyc
   }
@@ -811,7 +917,9 @@ impl CPU {
     let Operand(addr, cyc, _) = self.get_operand_addr(Addressing::AbsoluteY);
     let x = self.registers.get(Register::X);
 
-    self.bus.write(addr, x  & ((addr >> 8) as u8).wrapping_add(1));
+    self
+      .bus
+      .write(addr, x & ((addr >> 8) as u8).wrapping_add(1));
 
     2 + cyc
   }
@@ -820,7 +928,9 @@ impl CPU {
     let Operand(addr, cyc, _) = self.get_operand_addr(Addressing::AbsoluteY);
     let y = self.registers.get(Register::Y);
 
-    self.bus.write(addr, y  & ((addr >> 8) as u8).wrapping_add(1));
+    self
+      .bus
+      .write(addr, y & ((addr >> 8) as u8).wrapping_add(1));
 
     2 + cyc
   }
@@ -833,7 +943,7 @@ impl CPU {
 
     match mode {
       Addressing::AbsoluteX | Addressing::AbsoluteY | Addressing::IndirectY => 4 + cyc,
-      _ => 3 + cyc
+      _ => 3 + cyc,
     }
   }
 
@@ -845,7 +955,7 @@ impl CPU {
 
     match mode {
       Addressing::AbsoluteX | Addressing::AbsoluteY | Addressing::IndirectY => 4 + cyc,
-      _ => 3 + cyc
+      _ => 3 + cyc,
     }
   }
 
@@ -864,9 +974,10 @@ impl CPU {
     let x = self.registers.get(Register::X);
     let Operand(addr, cyc, _) = self.get_operand_addr(Addressing::AbsoluteY);
 
-
     self.registers.set(Register::SP, a & x);
-    self.bus.write(addr, a & x & ((addr >> 8) as u8).wrapping_add(1));
+    self
+      .bus
+      .write(addr, a & x & ((addr >> 8) as u8).wrapping_add(1));
 
     2 + cyc
   }
@@ -879,7 +990,9 @@ impl CPU {
   }
 
   fn txs(&mut self) -> u8 {
-    self.registers.set(Register::SP, self.registers.get(Register::X));
+    self
+      .registers
+      .set(Register::SP, self.registers.get(Register::X));
     2
   }
 }
