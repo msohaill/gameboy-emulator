@@ -1,5 +1,5 @@
 use crate::cpu::CPU;
-use crate::cpu::instruction::{Addressing, Instruction};
+use crate::cpu::instruction::{Addressing, Instruction, Operand};
 use crate::cpu::register::Register;
 
 pub fn trace(cpu: &mut CPU) -> String {
@@ -15,7 +15,7 @@ pub fn trace(cpu: &mut CPU) -> String {
     Addressing::Immediate | Addressing::Implied => (0, 0),
     _ => {
       cpu.registers.set_pc(cpu.registers.get_pc().wrapping_add(1));
-      let addr = cpu.get_operand_addr(instruction.mode);
+      let Operand(addr, _, _) = cpu.get_operand_addr(instruction.mode);
       cpu.registers.set_pc(cpu.registers.get_pc().wrapping_sub(1));
       (addr, cpu.bus.read(addr))
     },
@@ -31,7 +31,7 @@ pub fn trace(cpu: &mut CPU) -> String {
       hex_dump.push(addr);
 
       match instruction.mode {
-        Addressing::Immediate => match code {
+        Addressing::Immediate | Addressing::Relative => match code {
           0xD0 | 0x70 | 0x50 | 0x30 | 0xF0 | 0xB0 | 0x90 | 0x10 => {
             let address: usize = (start as usize + 2).wrapping_add((addr as i8) as usize);
             format!("${:04x}", address)
@@ -64,7 +64,7 @@ pub fn trace(cpu: &mut CPU) -> String {
       }
         Addressing::AbsoluteX => format!("${:04x},X @ {:04x} = {:02x}", address, memory_addr, stored_value),
         Addressing::AbsoluteY => format!("${:04x},Y @ {:04x} = {:02x}", address, memory_addr, stored_value),
-        Addressing::AbsoluteIndirect => {
+        Addressing::Indirect => {
           let jmp_addr = if address & 0x00FF == 0x00FF {
             let lo = cpu.bus.read(address);
             let hi = cpu.bus.read(address & 0xFF00);

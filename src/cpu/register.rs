@@ -69,7 +69,15 @@ impl Registers {
     self.program_status.get_flag(flag)
   }
 
-  pub fn set_flag(&mut self, flag: Flag, val: bool) {
-   self.program_status.set_flag(flag, val);
+  pub fn change_flag(&mut self, flag: Flag, val: bool) {
+    self.program_status.change_flag(flag, val);
+  }
+
+  pub fn set_flag(&mut self, flag: Flag) {
+   self.program_status.set_flag(flag);
+  }
+
+  pub fn unset_flag(&mut self, flag: Flag) {
+    self.program_status.unset_flag(flag);
   }
 }

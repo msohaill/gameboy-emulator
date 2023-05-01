@@ -6,6 +6,7 @@ use cartridge::Cartridge;
 use memory::Memory;
 
 pub struct Bus {
+  cycles: usize,
   memory: Memory,
   prg: Vec<u8>,
   ppu: PPU,
@@ -21,6 +22,7 @@ impl Bus {
 
   pub fn new(cartridge: Cartridge) -> Self {
     Bus {
+      cycles: 0,
       memory: Memory::new(),
       prg: cartridge.prg,
       ppu: PPU::new(cartridge.chr, cartridge.mirroring),
@@ -59,6 +61,11 @@ impl Bus {
     let hi = (data >> 8) as u8;
     self.write(addr, lo);
     self.write(addr.wrapping_add(1), hi);
+  }
+
+  pub fn tick(&mut self, cycles: u8) {
+    self.cycles += cycles as usize;
+    self.ppu.tick(3 * cycles);
   }
 
   fn read_prg(&self, addr: u16) -> u8 {

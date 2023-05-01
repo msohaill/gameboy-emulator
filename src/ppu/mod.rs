@@ -4,6 +4,7 @@ use crate::bus::Bus;
 use crate::bus::cartridge::Mirroring;
 use register::Registers;
 
+use register::controller::Flag as ControllerFlag;
 use register::status::Flag as StatusFlag;
 
 pub struct PPU {
@@ -13,7 +14,9 @@ pub struct PPU {
   pub oam: [u8; 0x100],
   pub mirroring: Mirroring,
   pub registers: Registers,
+  cycles: usize,
   data_buffer: u8,
+  scanline: u16,
 }
 
 impl PPU {
@@ -25,7 +28,9 @@ impl PPU {
       vram: [0; 0x800],
       oam: [0; 0x100],
       registers: Registers::new(),
+      cycles: 0,
       data_buffer: 0,
+      scanline: 0,
     }
   }
 
@@ -54,6 +59,29 @@ impl PPU {
       0x2008..=Bus::PPU_END => self.write(addr & 0x2007, data),
       _ => panic!("Illegal PPU write access: {:#0X}", addr),
     }
+  }
+
+  pub fn tick(&mut self, cycles: u8) -> bool {
+    self.cycles += cycles as usize;
+
+    if self.cycles >= 341 {
+      self.cycles -= 341;
+      self.scanline += 1;
+
+      if self.scanline == 241 && self.registers.controller.get_flag(ControllerFlag::NMIGen) {
+        self.registers.status.set_flag(StatusFlag::VBLankStarted);
+        todo!("Triger NMI interrupt");
+      }
+
+      if self.scanline == 262 {
+        self.scanline = 0;
+        self.registers.status.unset_flag(StatusFlag::VBLankStarted);
+
+        return true;
+      }
+    }
+
+    return false;
   }
 
   fn read_data(&mut self) -> u8 {
@@ -139,7 +167,7 @@ impl PPU {
   fn read_status(&mut self) -> u8 {
     let res = self.registers.status.get();
 
-    self.registers.status.set_flag(StatusFlag::VBLankStarted, false);
+    self.registers.status.unset_flag(StatusFlag::VBLankStarted);
     self.registers.address.reset();
     self.registers.scroll.reset();
 

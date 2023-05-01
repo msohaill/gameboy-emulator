@@ -35,7 +35,7 @@ macro_rules! bitflag {
           }
       }
 
-      pub fn set_flag(&mut self, flag: Flag, val: bool) {
+      pub fn change_flag(&mut self, flag: Flag, val: bool) {
         match flag {
           Flag::$zero =>
             self.value = if val { 1 | self.value } else { !(1) & self.value },
@@ -54,6 +54,14 @@ macro_rules! bitflag {
           Flag::$seven =>
             self.value = if val { (1 << 7) | self.value } else { !(1 << 7) & self.value },
         }
+      }
+
+      pub fn set_flag(&mut self, flag: Flag) {
+        self.change_flag(flag, true);
+      }
+
+      pub fn unset_flag(&mut self, flag: Flag) {
+        self.change_flag(flag, false);
       }
     }
 
