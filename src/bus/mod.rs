@@ -5,14 +5,15 @@ use crate::ppu::PPU;
 use cartridge::Cartridge;
 use memory::Memory;
 
-pub struct Bus {
+pub struct Bus<'call> {
+  callback: Box<dyn FnMut(&PPU) + 'call>,
   cycles: usize,
   memory: Memory,
   prg: Vec<u8>,
   ppu: PPU,
 }
 
-impl Bus {
+impl<'a> Bus<'a> {
   pub const RAM: u16 = 0x0000;
   pub const RAM_END: u16 = 0x1FFF;
   pub const PPU: u16 = 0x2000;
@@ -20,8 +21,12 @@ impl Bus {
   pub const ROM: u16 = 0x8000;
   pub const ROM_END: u16 = 0xFFFF;
 
-  pub fn new(cartridge: Cartridge) -> Self {
+  pub fn new<'call, F>(cartridge: Cartridge, callback: F) -> Bus<'call>
+  where
+    F: FnMut(&PPU) + 'call,
+  {
     Bus {
+      callback: Box::from(callback),
       cycles: 0,
       memory: Memory::new(),
       prg: cartridge.prg,
@@ -45,6 +50,7 @@ impl Bus {
     match addr {
       Bus::RAM..=Bus::RAM_END => self.memory.write(addr, data),
       Bus::PPU..=Bus::PPU_END => self.ppu.write(addr, data),
+      0x4014 => self.oam(data),
       Bus::ROM..=Bus::ROM_END => panic!("Attempting to write to cartridge ROM."),
       _ => println!("Ignoring write: {:#0X}", addr),
     }
@@ -65,7 +71,22 @@ impl Bus {
 
   pub fn tick(&mut self, cycles: u8) {
     self.cycles += cycles as usize;
-    self.ppu.tick(3 * cycles);
+    let new_frame = self.ppu.tick(3 * cycles);
+
+    if new_frame {
+      (self.callback)(&self.ppu)
+    }
+  }
+
+  fn oam(&mut self, data: u8) {
+    let mut buffer: [u8; 0x100] = [0; 0x100];
+
+    let hi: u16 = (data as u16) << 8;
+    for i in 0..0x100 {
+      buffer[i as usize] = self.read(hi + i);
+    }
+
+    self.ppu.write_oam_dma(&buffer);
   }
 
   fn read_prg(&self, addr: u16) -> u8 {
@@ -78,5 +99,9 @@ impl Bus {
 
   pub fn poll_nmi(&self) -> bool {
     self.ppu.nmi_interrupt
+  }
+
+  pub fn clear_nmi(&mut self) {
+    self.ppu.nmi_interrupt = false;
   }
 }

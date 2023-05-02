@@ -15,8 +15,10 @@ impl Address {
 
   pub fn write(&mut self, data: u8) {
     if self.latch {
+      self.value &= 0xFF;
       self.value |= (data as u16) << 8;
     } else {
+      self.value &= 0xFF00;
       self.value |= data as u16;
     }
 

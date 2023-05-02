@@ -162,7 +162,7 @@ impl PPU {
     match addr {
       0x3F10 | 0x3F14 | 0x3F18 | 0x3F1C => self.palette[(addr - 0x10 - 0x3F00) as usize],
       0x3F00..=0x3FFF => self.palette[(addr - 0x3F00) as usize],
-      _ => panic!("Illegal pallette table write: {:#0X}", addr),
+      _ => panic!("Illegal palette table write: {:#0X}", addr),
     }
   }
 
@@ -170,7 +170,7 @@ impl PPU {
     match addr {
       0x3F10 | 0x3F14 | 0x3F18 | 0x3F1C => self.palette[(addr - 0x10 - 0x3F00) as usize] = data,
       0x3F00..=0x3FFF => self.palette[(addr - 0x3F00) as usize] = data,
-      _ => panic!("Illegal pallette table access: {:#0X}", addr),
+      _ => panic!("Illegal palette table access: {:#0X}", addr),
     }
   }
 
@@ -196,6 +196,13 @@ impl PPU {
     self
       .registers
       .write_oam_addr(self.registers.oam_address.wrapping_add(1));
+  }
+
+  pub fn write_oam_dma(&mut self, buffer: &[u8; 0x100]) {
+    for x in buffer.iter() {
+      self.oam[self.registers.oam_address as usize] = *x;
+      self.registers.oam_address = self.registers.oam_address.wrapping_add(1);
+  }
   }
 
   fn read_status(&mut self) -> u8 {

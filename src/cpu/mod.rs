@@ -2,32 +2,29 @@ pub mod instruction;
 pub mod interrupt;
 pub mod register;
 
-use crate::bus::cartridge::Cartridge;
 use crate::bus::Bus;
 use instruction::{Addressing, Instruction, OpCode, Operand};
 use interrupt::{Interrupt, NMI, BRK};
 use register::{Flag, Register, Registers};
 
-pub struct CPU {
+pub struct CPU<'a> {
   pub registers: Registers,
-  pub bus: Bus,
+  pub bus: Bus<'a>,
 }
 
-impl CPU {
+impl<'a> CPU<'a> {
   const STACK_START: u16 = 0x0100;
 
-  pub fn new(cartridge: Cartridge) -> Self {
+  pub fn new<'b>(bus: Bus<'b>) -> CPU<'b> {
     CPU {
       registers: Registers::new(),
-      bus: Bus::new(cartridge),
+      bus,
     }
   }
 
   fn reset(&mut self) {
     self.registers = Registers::new();
     self.registers.set_pc(self.bus.readu16(0xFFFC)); // Check after
-    // self.registers.set_pc(0x0600);
-    self.registers.set_pc(0xC000);
   }
 
   pub fn start<F>(&mut self, callback: F)
@@ -118,6 +115,7 @@ impl CPU {
   {
     loop {
       if self.bus.poll_nmi() {
+        self.bus.clear_nmi();
         self.interrupt(NMI);
       }
 
