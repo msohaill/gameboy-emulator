@@ -1,5 +1,6 @@
 pub mod bus;
 pub mod cpu;
+pub mod joypad;
 pub mod ppu;
 pub mod renderer;
 pub mod utils;
@@ -16,6 +17,7 @@ use sdl2::pixels::PixelFormatEnum;
 use bus::cartridge::Cartridge;
 use cpu::CPU;
 use renderer::frame::Frame;
+use joypad::{Joypad, Flag as JoypadButton};
 
 fn main() {
   let sdl_context = sdl2::init().unwrap();
@@ -37,10 +39,10 @@ fn main() {
     .create_texture_target(PixelFormatEnum::RGB24, 256, 240)
     .unwrap();
 
-  let rom = Cartridge::new(&std::fs::read("dev/Pac_Man.nes").unwrap()).unwrap();
+  let rom = Cartridge::new(&std::fs::read("dev/Donkey_Kong.nes").unwrap()).unwrap();
   let mut frame = Frame::new();
 
-  let bus = Bus::new(rom, move |ppu: &PPU| {
+  let bus = Bus::new(rom, move |ppu: &PPU, joypad: &mut Joypad| {
     renderer::render(ppu, &mut frame);
     texture.update(None, &frame.data, 256 * 3).unwrap();
     canvas.copy(&texture, None, None).unwrap();
@@ -48,11 +50,41 @@ fn main() {
     canvas.present();
     for event in event_pump.poll_iter() {
       match event {
-        Event::Quit { .. }
-        | Event::KeyDown {
-          keycode: Some(Keycode::Escape),
-          ..
-        } => std::process::exit(0),
+        Event::Quit { .. } => std::process::exit(0),
+        Event::KeyDown {  keycode: Some(key), .. } => {
+          match key {
+            Keycode::Escape => std::process::exit(0),
+
+            Keycode::W => joypad.push(JoypadButton::Up),
+            Keycode::A => joypad.push(JoypadButton::Left),
+            Keycode::S => joypad.push(JoypadButton::Down),
+            Keycode::D => joypad.push(JoypadButton::Right),
+
+            Keycode::N => joypad.push(JoypadButton::A),
+            Keycode::M => joypad.push(JoypadButton::B),
+
+            Keycode::Return => joypad.push(JoypadButton::Start),
+            Keycode::Space => joypad.push(JoypadButton::Select),
+
+            _ => {}
+          };
+        }
+        Event::KeyUp {  keycode: Some(key), .. } => {
+          match key {
+            Keycode::W => joypad.release(JoypadButton::Up),
+            Keycode::A => joypad.release(JoypadButton::Left),
+            Keycode::S => joypad.release(JoypadButton::Down),
+            Keycode::D => joypad.release(JoypadButton::Right),
+
+            Keycode::N => joypad.release(JoypadButton::A),
+            Keycode::M => joypad.release(JoypadButton::B),
+
+            Keycode::Return => joypad.release(JoypadButton::Start),
+            Keycode::Space => joypad.release(JoypadButton::Select),
+
+            _ => {}
+          };
+        }
         _ => (),
       }
     }

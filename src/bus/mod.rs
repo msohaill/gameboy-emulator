@@ -1,12 +1,14 @@
 pub mod cartridge;
 pub mod memory;
 
+use crate::joypad::Joypad;
 use crate::ppu::PPU;
 use cartridge::Cartridge;
 use memory::Memory;
 
 pub struct Bus<'call> {
-  callback: Box<dyn FnMut(&PPU) + 'call>,
+  pub joypad: Joypad,
+  callback: Box<dyn FnMut(&PPU, &mut Joypad) + 'call>,
   cycles: usize,
   memory: Memory,
   prg: Vec<u8>,
@@ -20,12 +22,16 @@ impl<'a> Bus<'a> {
   pub const PPU_END: u16 = 0x3FFF;
   pub const ROM: u16 = 0x8000;
   pub const ROM_END: u16 = 0xFFFF;
+  pub const OAM_REQ: u16 = 0x4014;
+  pub const JOYPAD1: u16 = 0x4016;
+  pub const JOYPAD2: u16 = 0x4017;
 
   pub fn new<'call, F>(cartridge: Cartridge, callback: F) -> Bus<'call>
   where
-    F: FnMut(&PPU) + 'call,
+    F: FnMut(&PPU, &mut Joypad) + 'call,
   {
     Bus {
+      joypad: Joypad::new(),
       callback: Box::from(callback),
       cycles: 0,
       memory: Memory::new(),
@@ -39,6 +45,9 @@ impl<'a> Bus<'a> {
       Bus::RAM..=Bus::RAM_END => self.memory.read(addr),
       Bus::PPU..=Bus::PPU_END => self.ppu.read(addr),
       Bus::ROM..=Bus::ROM_END => self.read_prg(addr),
+      Bus::JOYPAD1 => self.joypad.read(),
+      Bus::JOYPAD2 => 0, // Ignoring for now
+      0x4000..=0x4015 => 0, // Ignoring APU for now
       _ => {
         println!("Ignoring read: {:#0X}", addr);
         0
@@ -50,8 +59,11 @@ impl<'a> Bus<'a> {
     match addr {
       Bus::RAM..=Bus::RAM_END => self.memory.write(addr, data),
       Bus::PPU..=Bus::PPU_END => self.ppu.write(addr, data),
-      0x4014 => self.oam(data),
       Bus::ROM..=Bus::ROM_END => panic!("Attempting to write to cartridge ROM."),
+      Bus::OAM_REQ => self.oam(data),
+      Bus::JOYPAD1 => self.joypad.write(data),
+      Bus::JOYPAD2 => (), // Ignoring for now
+      0x4000..=0x4013 | 0x4015 => (), // Ignoring APU for now
       _ => println!("Ignoring write: {:#0X}", addr),
     }
   }
@@ -74,7 +86,7 @@ impl<'a> Bus<'a> {
     let new_frame = self.ppu.tick(3 * cycles);
 
     if new_frame {
-      (self.callback)(&self.ppu)
+      (self.callback)(&self.ppu, &mut self.joypad)
     }
   }
 
