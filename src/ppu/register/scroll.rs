@@ -1,6 +1,6 @@
 pub struct Scroll {
-  scrollx: u8,
-  scrolly: u8,
+  pub scrollx: u8,
+  pub scrolly: u8,
   latch: bool,
 }
 

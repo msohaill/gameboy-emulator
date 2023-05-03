@@ -5,6 +5,7 @@ use crate::bus::Bus;
 use register::Registers;
 
 use register::controller::Flag as ControllerFlag;
+use register::mask::Flag as MaskFlag;
 use register::status::Flag as StatusFlag;
 
 pub struct PPU {
@@ -77,6 +78,16 @@ impl PPU {
     self.cycles += cycles as usize;
 
     if self.cycles >= 341 {
+      let x = self.oam[3] as usize;
+      let y = self.oam[0] as u16;
+
+      if y == self.scanline
+        && x <= self.cycles
+        && self.registers.mask.get_flag(MaskFlag::ShowSprites)
+      {
+        self.registers.status.set_flag(StatusFlag::SpriteZeroHit);
+      }
+
       self.cycles -= 341;
       self.scanline += 1;
 
@@ -88,7 +99,6 @@ impl PPU {
           self.nmi_interrupt = true;
         }
       }
-
 
       if self.scanline == 262 {
         self.scanline = 0;
@@ -202,7 +212,7 @@ impl PPU {
     for x in buffer.iter() {
       self.oam[self.registers.oam_address as usize] = *x;
       self.registers.oam_address = self.registers.oam_address.wrapping_add(1);
-  }
+    }
   }
 
   fn read_status(&mut self) -> u8 {

@@ -18,4 +18,13 @@ impl Controller {
       1u8
     }
   }
+
+  pub fn name_table(&self) -> u16 {
+    match (self.get_flag(Flag::NameHi), self.get_flag(Flag::NameLo)) {
+      (false, false) => 0x2000,
+      (false, true) => 0x2400,
+      (true, false) => 0x2800,
+      (true, true) => 0x2C00,
+    }
+  }
 }

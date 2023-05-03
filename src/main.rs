@@ -39,7 +39,7 @@ fn main() {
     .create_texture_target(PixelFormatEnum::RGB24, 256, 240)
     .unwrap();
 
-  let rom = Cartridge::new(&std::fs::read("dev/Donkey_Kong.nes").unwrap()).unwrap();
+  let rom = Cartridge::new(&std::fs::read("dev/Super_Mario.nes").unwrap()).unwrap();
   let mut frame = Frame::new();
 
   let bus = Bus::new(rom, move |ppu: &PPU, joypad: &mut Joypad| {

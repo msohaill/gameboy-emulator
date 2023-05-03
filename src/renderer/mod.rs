@@ -1,14 +1,17 @@
 pub mod color;
 pub mod frame;
 pub mod palette;
+pub mod viewport;
 
+use super::bus::cartridge::Mirroring;
 use super::ppu::{register::controller::Flag as ControllerFlag, PPU};
 use frame::Frame;
 use palette::PALETTE;
+use viewport::Viewport;
 
-fn background_palette(ppu: &PPU, column: usize, row: usize) -> [usize; 4] {
+fn background_palette(ppu: &PPU, attribute_table: &[u8], column: usize, row: usize) -> [usize; 4] {
   let index = row / 4 * 8 + column / 4;
-  let byte = ppu.vram[0x3C0 + index];
+  let byte = attribute_table[index];
 
   let palette_index = match (column % 4 / 2, row % 4 / 2) {
     (0, 0) => byte & 0b11,
@@ -37,20 +40,21 @@ fn sprite_palette(ppu: &PPU, palette_index: u8) -> [usize; 4] {
   ]
 }
 
-pub fn render(ppu: &PPU, frame: &mut Frame) {
+fn render_name_table(ppu: &PPU, frame: &mut Frame, name_table: &[u8], viewport: Viewport) {
   let bank = 0x1000
     * (ppu
       .registers
       .controller
       .get_flag(ControllerFlag::BackgroundAddr) as u16);
 
-  for i in 0..0x03C0 {
-    let tile = ppu.vram[i] as u16;
+  let attribute_table = &name_table[0x3C0..0x400];
+
+  for i in 0..0x3C0 {
     let column = i % 32;
     let row = i / 32;
-
-    let tile = &ppu.chr[(bank + tile * 16) as usize..=(bank + tile * 16 + 15) as usize];
-    let palette = background_palette(ppu, column, row);
+    let index = name_table[i] as u16;
+    let tile = &ppu.chr[(bank + index * 16) as usize..=(bank + index * 16 + 15) as usize];
+    let palette = background_palette(ppu, attribute_table, column, row);
 
     for y in 0..=7 {
       let mut upper = tile[y];
@@ -58,14 +62,76 @@ pub fn render(ppu: &PPU, frame: &mut Frame) {
 
       for x in (0..=7).rev() {
         let val = (1 & lower) << 1 | (1 & upper);
-        upper = upper >> 1;
-        lower = lower >> 1;
+        upper >>= 1;
+        lower >>= 1;
 
         let color = PALETTE[palette[val as usize]];
 
-        frame.set_pixel(column * 8 + x, row * 8 + y, color)
+        let pixel_x = column * 8 + x;
+        let pixel_y = row * 8 + y;
+
+        if pixel_x >= viewport.0
+          && pixel_x < viewport.2
+          && pixel_y >= viewport.1
+          && pixel_y < viewport.3
+        {
+          frame.set_pixel(
+            (viewport.4 + pixel_x as isize) as usize,
+            (viewport.5 + pixel_y as isize) as usize,
+            color,
+          );
+        }
       }
     }
+  }
+}
+
+pub fn render(ppu: &PPU, frame: &mut Frame) {
+  let scrollx = ppu.registers.scroll.scrollx as usize;
+  let scrolly = ppu.registers.scroll.scrolly as usize;
+
+  let (main, secondary) = match (&ppu.mirroring, ppu.registers.controller.name_table()) {
+    (Mirroring::Vertical, 0x2000)
+    | (Mirroring::Vertical, 0x2800)
+    | (Mirroring::Horizontal, 0x2000)
+    | (Mirroring::Horizontal, 0x2400) => (&ppu.vram[0..0x400], &ppu.vram[0x400..0x800]),
+    (Mirroring::Vertical, 0x2400)
+    | (Mirroring::Vertical, 0x2C00)
+    | (Mirroring::Horizontal, 0x2800)
+    | (Mirroring::Horizontal, 0x2C00) => (&ppu.vram[0x400..0x800], &ppu.vram[0..0x400]),
+    (_, _) => {
+      panic!("Unsupported mirroring type.");
+    }
+  };
+
+  render_name_table(
+    ppu,
+    frame,
+    main,
+    Viewport(
+      scrollx,
+      scrolly,
+      256,
+      240,
+      -(scrollx as isize),
+      -(scrolly as isize),
+    ),
+  );
+
+  if scrollx > 0 {
+    render_name_table(
+      ppu,
+      frame,
+      secondary,
+      Viewport(0, 0, scrollx, 240, (256 - scrollx) as isize, 0),
+    );
+  } else if scrolly > 0 {
+    render_name_table(
+      ppu,
+      frame,
+      secondary,
+      Viewport(0, 0, 256, scrolly, 0, (240 - scrolly) as isize),
+    );
   }
 
   for i in (0..ppu.oam.len()).step_by(4).rev() {
@@ -93,8 +159,8 @@ pub fn render(ppu: &PPU, frame: &mut Frame) {
 
       'draw: for x in (0..=7).rev() {
         let val = (1 & lower) << 1 | (1 & upper);
-        upper = upper >> 1;
-        lower = lower >> 1;
+        upper >>= 1;
+        lower >>= 1;
 
         if val == 0 {
           continue 'draw;
