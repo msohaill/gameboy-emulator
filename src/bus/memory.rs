@@ -14,6 +14,6 @@ impl Memory {
   }
 
   pub fn write(&mut self, addr: u16, data: u8) {
-    self.vram[(addr & ((1 << 11) - 1)) as usize] = data
+    self.vram[(addr & 0x7FF) as usize] = data
   }
 }
