@@ -105,9 +105,7 @@ impl<'a> Bus<'a> {
 
   fn read_prg(&self, addr: u16) -> u8 {
     let mut index = addr - Bus::ROM;
-    if self.prg.len() == 0x4000 && index >= 0x4000 {
-      index = index % 0x4000
-    }
+    index %= self.prg.len() as u16;
     self.prg[index as usize]
   }
 
