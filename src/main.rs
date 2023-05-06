@@ -1,20 +1,17 @@
-pub mod bus;
+pub mod system;
 pub mod cpu;
 pub mod joypad;
 pub mod ppu;
 pub mod renderer;
 pub mod utils;
 
-use bus::Bus;
+use system::System;
 use ppu::PPU;
 use sdl2::event::Event;
-// use sdl2::EventPump;
 use sdl2::keyboard::Keycode;
-// use sdl2::pixels::Color;
 use sdl2::pixels::PixelFormatEnum;
-// use sdl2::render::TextureAccess;
 
-use bus::cartridge::Cartridge;
+use system::cartridge::Cartridge;
 use cpu::CPU;
 use renderer::frame::Frame;
 use joypad::{Joypad, Flag as JoypadButton};
@@ -42,7 +39,7 @@ fn main() {
   let rom = Cartridge::new(&std::fs::read("dev/Super_Mario.nes").unwrap()).unwrap();
   let mut frame = Frame::new();
 
-  let bus = Bus::new(rom, move |ppu: &PPU, joypad: &mut Joypad| {
+  let system = System::new(rom, move |ppu: &PPU, joypad: &mut Joypad| {
     renderer::render(ppu, &mut frame);
     texture.update(None, &frame.data, 256 * 3).unwrap();
     canvas.copy(&texture, None, None).unwrap();
@@ -90,6 +87,6 @@ fn main() {
     }
   });
 
-  let mut cpu = CPU::new(bus);
+  let mut cpu = CPU::new(system);
   cpu.start(|_| {});
 }

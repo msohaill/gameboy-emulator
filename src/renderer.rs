@@ -3,7 +3,7 @@ pub mod frame;
 pub mod palette;
 pub mod viewport;
 
-use super::bus::cartridge::Mirroring;
+use super::system::cartridge::Mirroring;
 use super::ppu::PPU;
 use frame::Frame;
 use palette::PALETTE;

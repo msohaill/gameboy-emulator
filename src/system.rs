@@ -6,7 +6,7 @@ use crate::ppu::PPU;
 use cartridge::Cartridge;
 use memory::Memory;
 
-pub struct Bus<'call> {
+pub struct System<'call> {
   pub joypad: Joypad,
   callback: Box<dyn FnMut(&PPU, &mut Joypad) + 'call>,
   cycles: usize,
@@ -15,7 +15,7 @@ pub struct Bus<'call> {
   ppu: PPU,
 }
 
-impl<'a> Bus<'a> {
+impl<'a> System<'a> {
   pub const RAM: u16 = 0x0000;
   pub const RAM_END: u16 = 0x1FFF;
   pub const PPU: u16 = 0x2000;
@@ -26,11 +26,11 @@ impl<'a> Bus<'a> {
   pub const JOYPAD1: u16 = 0x4016;
   pub const JOYPAD2: u16 = 0x4017;
 
-  pub fn new<'call, F>(cartridge: Cartridge, callback: F) -> Bus<'call>
+  pub fn new<'call, F>(cartridge: Cartridge, callback: F) -> System<'call>
   where
     F: FnMut(&PPU, &mut Joypad) + 'call,
   {
-    Bus {
+    System {
       joypad: Joypad::new(),
       callback: Box::from(callback),
       cycles: 0,
@@ -42,11 +42,11 @@ impl<'a> Bus<'a> {
 
   pub fn read(&mut self, addr: u16) -> u8 {
     match addr {
-      Bus::RAM..=Bus::RAM_END => self.memory.read(addr),
-      Bus::PPU..=Bus::PPU_END => self.ppu.read(addr),
-      Bus::ROM..=Bus::ROM_END => self.read_prg(addr),
-      Bus::JOYPAD1 => self.joypad.read(),
-      Bus::JOYPAD2 => 0, // Ignoring for now
+      System::RAM..=System::RAM_END => self.memory.read(addr),
+      System::PPU..=System::PPU_END => self.ppu.read(addr),
+      System::ROM..=System::ROM_END => self.read_prg(addr),
+      System::JOYPAD1 => self.joypad.read(),
+      System::JOYPAD2 => 0, // Ignoring for now
       0x4000..=0x4015 => 0, // Ignoring APU for now
       _ => {
         println!("Ignoring read: {:#0X}", addr);
@@ -57,12 +57,12 @@ impl<'a> Bus<'a> {
 
   pub fn write(&mut self, addr: u16, data: u8) {
     match addr {
-      Bus::RAM..=Bus::RAM_END => self.memory.write(addr, data),
-      Bus::PPU..=Bus::PPU_END => self.ppu.write(addr, data),
-      Bus::ROM..=Bus::ROM_END => panic!("Attempting to write to cartridge ROM."),
-      Bus::OAM_REQ => self.oam(data),
-      Bus::JOYPAD1 => self.joypad.write(data),
-      Bus::JOYPAD2 => (), // Ignoring for now
+      System::RAM..=System::RAM_END => self.memory.write(addr, data),
+      System::PPU..=System::PPU_END => self.ppu.write(addr, data),
+      System::ROM..=System::ROM_END => panic!("Attempting to write to cartridge ROM."),
+      System::OAM_REQ => self.oam(data),
+      System::JOYPAD1 => self.joypad.write(data),
+      System::JOYPAD2 => (), // Ignoring for now
       0x4000..=0x4013 | 0x4015 => (), // Ignoring APU for now
       _ => println!("Ignoring write: {:#0X}", addr),
     }
@@ -104,7 +104,7 @@ impl<'a> Bus<'a> {
   }
 
   fn read_prg(&self, addr: u16) -> u8 {
-    let mut index = addr - Bus::ROM;
+    let mut index = addr - System::ROM;
     index %= self.prg.len() as u16;
     self.prg[index as usize]
   }

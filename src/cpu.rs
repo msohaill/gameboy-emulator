@@ -2,31 +2,31 @@ pub mod instruction;
 pub mod interrupt;
 pub mod register;
 
-use crate::bus::Bus;
+use crate::system::System;
 use instruction::{Addressing, Instruction, OpCode, Operand, OperandAddress};
 use interrupt::{Interrupt, BRK, NMI};
 use register::{Flag, Register, Registers};
 
 pub struct CPU<'a> {
   pub registers: Registers,
-  pub bus: Bus<'a>,
+  pub system: System<'a>,
   branched: bool,
 }
 
 impl<'a> CPU<'a> {
   const STACK_START: u16 = 0x0100;
 
-  pub fn new<'b>(bus: Bus<'b>) -> CPU<'b> {
+  pub fn new<'b>(system: System<'b>) -> CPU<'b> {
     CPU {
       registers: Registers::new(),
-      bus,
+      system,
       branched: false,
     }
   }
 
   fn reset(&mut self) {
     self.registers = Registers::new();
-    self.registers.set_pc(self.bus.readu16(0xFFFC));
+    self.registers.set_pc(self.system.readu16(0xFFFC));
   }
 
   pub fn start<F>(&mut self, callback: F)
@@ -42,8 +42,8 @@ impl<'a> CPU<'a> {
     F: FnMut(&mut CPU),
   {
     loop {
-      if self.bus.poll_nmi() {
-        self.bus.clear_nmi();
+      if self.system.poll_nmi() {
+        self.system.clear_nmi();
         self.interrupt(NMI);
       }
 
@@ -56,7 +56,7 @@ impl<'a> CPU<'a> {
 
       let cycles = instruction.cycles + instruction.extra * (operand.0.2 as u8) + self.branched();
 
-      self.bus.tick(cycles);
+      self.system.tick(cycles);
     }
   }
 
@@ -77,21 +77,21 @@ impl<'a> CPU<'a> {
 
     self.registers.set_flag(Flag::InterruptDisable);
 
-    self.bus.tick(interrupt.cycles);
+    self.system.tick(interrupt.cycles);
 
     self
       .registers
-      .set_pc(self.bus.readu16(interrupt.read_address));
+      .set_pc(self.system.readu16(interrupt.read_address));
   }
 
   fn read(&mut self) -> u8 {
-    let res = self.bus.read(self.registers.get_pc());
+    let res = self.system.read(self.registers.get_pc());
     self.increment_pc(1);
     res
   }
 
   fn readu16(&mut self) -> u16 {
-    let res = self.bus.readu16(self.registers.get_pc());
+    let res = self.system.readu16(self.registers.get_pc());
     self.increment_pc(2);
     res
   }
@@ -101,7 +101,7 @@ impl<'a> CPU<'a> {
       panic!("Attempted to store beyone stack capacity.");
     }
 
-    self.bus.write(
+    self.system.write(
       CPU::STACK_START.wrapping_add(self.registers.get(Register::SP) as u16),
       data,
     );
@@ -121,7 +121,7 @@ impl<'a> CPU<'a> {
       self.registers.get(Register::SP).wrapping_add(1),
     );
     self
-      .bus
+      .system
       .read(CPU::STACK_START.wrapping_add(self.registers.get(Register::SP) as u16))
   }
 
@@ -185,28 +185,28 @@ impl<'a> CPU<'a> {
       Addressing::Indirect => {
         let base_addr = self.readu16();
         let addr = if base_addr & 0x00FF == 0x00FF {
-          let lo = self.bus.read(base_addr) as u16;
-          let hi = self.bus.read(base_addr & 0xFF00) as u16;
+          let lo = self.system.read(base_addr) as u16;
+          let hi = self.system.read(base_addr & 0xFF00) as u16;
 
           (hi << 8) | lo
         } else {
-          self.bus.readu16(base_addr)
+          self.system.readu16(base_addr)
         };
 
         OperandAddress(addr, mode, false)
       }
       Addressing::IndirectX => {
         let fetch_addr = self.read().wrapping_add(self.registers.get(Register::X));
-        let lo = self.bus.read(fetch_addr as u16) as u16;
-        let hi = self.bus.read(fetch_addr.wrapping_add(1) as u16) as u16;
+        let lo = self.system.read(fetch_addr as u16) as u16;
+        let hi = self.system.read(fetch_addr.wrapping_add(1) as u16) as u16;
         let addr = (hi << 8) | lo;
 
         OperandAddress(addr, mode, false)
       }
       Addressing::IndirectY => {
         let fetch_addr = self.read();
-        let lo = self.bus.read(fetch_addr as u16) as u16;
-        let hi = self.bus.read((fetch_addr).wrapping_add(1) as u16) as u16;
+        let lo = self.system.read(fetch_addr as u16) as u16;
+        let hi = self.system.read((fetch_addr).wrapping_add(1) as u16) as u16;
         let base_addr = (hi << 8) | lo;
         let addr = base_addr.wrapping_add(self.registers.get(Register::Y) as u16);
         let extra = (addr & 0xFF00) != (base_addr & 0xFF00);
@@ -247,7 +247,7 @@ impl<'a> CPU<'a> {
       (_, false) => Operand(self.get_operand_addr(mode), 0x0),
       _ => {
         let OperandAddress(addr, mode, extra) = self.get_operand_addr(mode);
-        Operand(OperandAddress(addr, mode, extra), self.bus.read(addr))
+        Operand(OperandAddress(addr, mode, extra), self.system.read(addr))
       }
     }
   }
@@ -399,7 +399,7 @@ impl<'a> CPU<'a> {
         self.registers.set(Register::A, data << 1);
       }
       _ => {
-        self.bus.write(addr, data << 1);
+        self.system.write(addr, data << 1);
       }
     }
   }
@@ -517,7 +517,7 @@ impl<'a> CPU<'a> {
   }
 
   fn dec(&mut self, Operand(OperandAddress(addr, _, _), data): Operand) {
-    self.bus.write(addr, data.wrapping_sub(1));
+    self.system.write(addr, data.wrapping_sub(1));
     self.update_zero_negative(data.wrapping_sub(1));
   }
 
@@ -543,7 +543,7 @@ impl<'a> CPU<'a> {
   }
 
   fn inc(&mut self, Operand(OperandAddress(addr, _, _), data): Operand) {
-    self.bus.write(addr, data.wrapping_add(1));
+    self.system.write(addr, data.wrapping_add(1));
     self.update_zero_negative(data.wrapping_add(1));
   }
 
@@ -614,7 +614,7 @@ impl<'a> CPU<'a> {
         self.registers.set(Register::A, data >> 1);
       }
       _ => {
-        self.bus.write(addr, data >> 1);
+        self.system.write(addr, data >> 1);
       }
     }
   }
@@ -673,7 +673,7 @@ impl<'a> CPU<'a> {
         self.registers.set(Register::A, res);
       }
       _ => {
-        self.bus.write(addr, res);
+        self.system.write(addr, res);
       }
     }
   }
@@ -690,7 +690,7 @@ impl<'a> CPU<'a> {
         self.registers.set(Register::A, res);
       }
       _ => {
-        self.bus.write(addr, res);
+        self.system.write(addr, res);
       }
     }
   }
@@ -717,7 +717,7 @@ impl<'a> CPU<'a> {
     let a = self.registers.get(Register::A);
     let x = self.registers.get(Register::X);
 
-    self.bus.write(addr, a & x);
+    self.system.write(addr, a & x);
   }
 
   fn sbc(&mut self, Operand(_, data): Operand) {
@@ -764,7 +764,7 @@ impl<'a> CPU<'a> {
   }
 
   fn sha(&mut self, Operand(OperandAddress(addr, _, _), _): Operand) {
-    self.bus.write(
+    self.system.write(
       addr,
       self.registers.get(Register::A)
         & self.registers.get(Register::X)
@@ -773,14 +773,14 @@ impl<'a> CPU<'a> {
   }
 
   fn shx(&mut self, Operand(OperandAddress(addr, _, _), _): Operand) {
-    self.bus.write(
+    self.system.write(
       addr,
       self.registers.get(Register::X) & ((addr >> 8) as u8).wrapping_add(1),
     );
   }
 
   fn shy(&mut self, Operand(OperandAddress(addr, _, _), _): Operand) {
-    self.bus.write(
+    self.system.write(
       addr,
       self.registers.get(Register::Y) & ((addr >> 8) as u8).wrapping_add(1),
     );
@@ -797,15 +797,15 @@ impl<'a> CPU<'a> {
   }
 
   fn sta(&mut self, Operand(OperandAddress(addr, _, _), _): Operand) {
-    self.bus.write(addr, self.registers.get(Register::A));
+    self.system.write(addr, self.registers.get(Register::A));
   }
 
   fn stx(&mut self, Operand(OperandAddress(addr, _, _), _): Operand) {
-    self.bus.write(addr, self.registers.get(Register::X));
+    self.system.write(addr, self.registers.get(Register::X));
   }
 
   fn sty(&mut self, Operand(OperandAddress(addr, _, _), _): Operand) {
-    self.bus.write(addr, self.registers.get(Register::Y));
+    self.system.write(addr, self.registers.get(Register::Y));
   }
 
   fn tas(&mut self, Operand(OperandAddress(addr, _, _), _): Operand) {
@@ -814,7 +814,7 @@ impl<'a> CPU<'a> {
 
     self.registers.set(Register::SP, a & x);
     self
-      .bus
+      .system
       .write(addr, a & x & ((addr >> 8) as u8).wrapping_add(1));
   }
 

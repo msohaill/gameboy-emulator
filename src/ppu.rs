@@ -1,7 +1,7 @@
 pub mod register;
 
-use crate::bus::cartridge::Mirroring;
-use crate::bus::Bus;
+use crate::system::cartridge::Mirroring;
+use crate::system::System;
 use register::Registers;
 
 use register::controller::Flag as ControllerFlag;
@@ -45,7 +45,7 @@ impl PPU {
       0x2002 => self.read_status(),
       0x2004 => self.read_oam_data(),
       0x2007 => self.read_data(),
-      0x2008..=Bus::PPU_END => self.read(addr & 0x2007),
+      0x2008..=System::PPU_END => self.read(addr & 0x2007),
       _ => panic!("Illegal PPU read access: {:#0X}", addr),
     }
   }
@@ -69,7 +69,7 @@ impl PPU {
       0x2005 => self.registers.scroll.write(data),
       0x2006 => self.registers.address.write(data),
       0x2007 => self.write_data(data),
-      0x2008..=Bus::PPU_END => self.write(addr & 0x2007, data),
+      0x2008..=System::PPU_END => self.write(addr & 0x2007, data),
       _ => panic!("Illegal PPU write access: {:#0X}", addr),
     }
   }

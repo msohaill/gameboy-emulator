@@ -1,4 +1,4 @@
-use crate::bus::Bus;
+use crate::system::System;
 
 pub struct Address {
   value: u16,
@@ -36,8 +36,8 @@ impl Address {
   }
 
   fn mirror(&mut self) {
-    if self.value > Bus::PPU_END {
-      self.value &= Bus::PPU_END;
+    if self.value > System::PPU_END {
+      self.value &= System::PPU_END;
     }
   }
 
