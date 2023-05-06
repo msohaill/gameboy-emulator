@@ -26,7 +26,62 @@ impl<'a> CPU<'a> {
 
   fn reset(&mut self) {
     self.registers = Registers::new();
-    self.registers.set_pc(self.bus.readu16(0xFFFC)); // Check after
+    self.registers.set_pc(self.bus.readu16(0xFFFC));
+  }
+
+  pub fn start<F>(&mut self, callback: F)
+  where
+    F: FnMut(&mut CPU),
+  {
+    self.reset();
+    self.run(callback);
+  }
+
+  fn run<F>(&mut self, mut callback: F)
+  where
+    F: FnMut(&mut CPU),
+  {
+    loop {
+      if self.bus.poll_nmi() {
+        self.bus.clear_nmi();
+        self.interrupt(NMI);
+      }
+
+      callback(self);
+
+      let instruction = Instruction::get(self.read());
+      let operand = self.get_operand(instruction.mode, instruction.needs_data());
+
+      self.execute_instr(instruction.opcode, operand);
+
+      let cycles = instruction.cycles + instruction.extra * (operand.0.2 as u8) + self.branched();
+
+      self.bus.tick(cycles);
+    }
+  }
+
+  fn interrupt(&mut self, interrupt: Interrupt) {
+    if self.registers.get_flag(Flag::InterruptDisable) && (interrupt == BRK) {
+      return;
+    }
+
+    self
+      .registers
+      .change_flag(Flag::B1, interrupt.mask & 0b00010000 == 0b00010000);
+    self
+      .registers
+      .change_flag(Flag::B2, interrupt.mask & 0b00100000 == 0b00100000);
+
+    self.stack_pushu16(self.registers.get_pc());
+    self.stack_push(self.registers.get(Register::P));
+
+    self.registers.set_flag(Flag::InterruptDisable);
+
+    self.bus.tick(interrupt.cycles);
+
+    self
+      .registers
+      .set_pc(self.bus.readu16(interrupt.read_address));
   }
 
   fn read(&mut self) -> u8 {
@@ -39,14 +94,6 @@ impl<'a> CPU<'a> {
     let res = self.bus.readu16(self.registers.get_pc());
     self.increment_pc(2);
     res
-  }
-
-  pub fn start<F>(&mut self, callback: F)
-  where
-    F: FnMut(&mut CPU),
-  {
-    self.reset();
-    self.run(callback);
   }
 
   fn stack_push(&mut self, data: u8) {
@@ -99,30 +146,6 @@ impl<'a> CPU<'a> {
       .set_pc(self.registers.get_pc().wrapping_add(i));
   }
 
-  fn interrupt(&mut self, interrupt: Interrupt) {
-    if self.registers.get_flag(Flag::InterruptDisable) && (interrupt == BRK) {
-      return;
-    }
-
-    self
-      .registers
-      .change_flag(Flag::B1, interrupt.mask & 0b00010000 == 0b00010000);
-    self
-      .registers
-      .change_flag(Flag::B2, interrupt.mask & 0b00100000 == 0b00100000);
-
-    self.stack_pushu16(self.registers.get_pc());
-    self.stack_push(self.registers.get(Register::P));
-
-    self.registers.set_flag(Flag::InterruptDisable);
-
-    self.bus.tick(interrupt.cycles);
-
-    self
-      .registers
-      .set_pc(self.bus.readu16(interrupt.read_address));
-  }
-
   fn branched(&mut self) -> u8 {
     if self.branched {
       self.branched = false;
@@ -132,113 +155,14 @@ impl<'a> CPU<'a> {
     }
   }
 
-  fn run<F>(&mut self, mut callback: F)
-  where
-    F: FnMut(&mut CPU),
-  {
-    loop {
-      if self.bus.poll_nmi() {
-        self.bus.clear_nmi();
-        self.interrupt(NMI);
-      }
-
-      callback(self);
-
-      let instruction = Instruction::get(self.read());
-      let operand = self.get_operand(instruction.mode, instruction.needs_data());
-
-      self.execute_instr(instruction.opcode, operand);
-
-      let cycles = instruction.cycles + instruction.extra * (operand.0.2 as u8) + self.branched();
-
-      self.bus.tick(cycles);
-    }
+  fn update_zero_negative(&mut self, res: u8) {
+    self.registers.change_flag(Flag::Zero, res == 0x00);
+    self
+      .registers
+      .change_flag(Flag::Negative, res & 0x80 == 0x80);
   }
 
-  fn execute_instr(&mut self, opcode: OpCode, operand: Operand) {
-    match opcode {
-      OpCode::ADC   =>  self.adc(operand),
-      OpCode::XALR  =>  self.alr(operand),
-      OpCode::XANC  =>  self.anc(operand),
-      OpCode::AND   =>  self.and(operand),
-      OpCode::XANE  =>  self.ane(operand),
-      OpCode::XARR  =>  self.arr(operand),
-      OpCode::ASL   =>  self.asl(operand),
-      OpCode::BCC   =>  self.bcc(operand),
-      OpCode::BCS   =>  self.bcs(operand),
-      OpCode::BEQ   =>  self.beq(operand),
-      OpCode::BIT   =>  self.bit(operand),
-      OpCode::BMI   =>  self.bmi(operand),
-      OpCode::BNE   =>  self.bne(operand),
-      OpCode::BPL   =>  self.bpl(operand),
-      OpCode::BRK   =>  self.brk(),
-      OpCode::BVC   =>  self.bvc(operand),
-      OpCode::BVS   =>  self.bvs(operand),
-      OpCode::CLC   =>  self.clc(),
-      OpCode::CLD   =>  self.cld(),
-      OpCode::CLI   =>  self.cli(),
-      OpCode::CLV   =>  self.clv(),
-      OpCode::CMP   =>  self.cmp(operand),
-      OpCode::CPX   =>  self.cpx(operand),
-      OpCode::CPY   =>  self.cpy(operand),
-      OpCode::XDCP  =>  self.dcp(operand),
-      OpCode::DEC   =>  self.dec(operand),
-      OpCode::DEX   =>  self.dex(),
-      OpCode::DEY   =>  self.dey(),
-      OpCode::EOR   =>  self.eor(operand),
-      OpCode::INC   =>  self.inc(operand),
-      OpCode::INX   =>  self.inx(),
-      OpCode::INY   =>  self.iny(),
-      OpCode::XISC  =>  self.isc(operand),
-      OpCode::JAM   =>  panic!("Console was jammed, please reboot."),
-      OpCode::JMP   =>  self.jmp(operand),
-      OpCode::JSR   =>  self.jsr(operand),
-      OpCode::XLAS  =>  self.las(operand),
-      OpCode::XLAX  =>  self.lax(operand),
-      OpCode::LDA   =>  self.lda(operand),
-      OpCode::LDX   =>  self.ldx(operand),
-      OpCode::LDY   =>  self.ldy(operand),
-      OpCode::LSR   =>  self.lsr(operand),
-      OpCode::XLXA  =>  self.lxa(operand),
-      OpCode::NOP   =>  self.nop(),
-      OpCode::XNOP  =>  self.nop(),
-      OpCode::ORA   =>  self.ora(operand),
-      OpCode::PHA   =>  self.pha(),
-      OpCode::PHP   =>  self.php(),
-      OpCode::PLA   =>  self.pla(),
-      OpCode::PLP   =>  self.plp(),
-      OpCode::XRLA  =>  self.rla(operand),
-      OpCode::ROL   =>  self.rol(operand),
-      OpCode::ROR   =>  self.ror(operand),
-      OpCode::XRRA  =>  self.rra(operand),
-      OpCode::RTI   =>  self.rti(),
-      OpCode::RTS   =>  self.rts(),
-      OpCode::XSAX  =>  self.sax(operand),
-      OpCode::SBC   =>  self.sbc(operand),
-      OpCode::XSBC  =>  self.sbc(operand),
-      OpCode::XSBX  =>  self.sbx(operand),
-      OpCode::SEC   =>  self.sec(),
-      OpCode::SED   =>  self.sed(),
-      OpCode::SEI   =>  self.sei(),
-      OpCode::XSHA  =>  self.sha(operand),
-      OpCode::XSHX  =>  self.shx(operand),
-      OpCode::XSHY  =>  self.shy(operand),
-      OpCode::XSLO  =>  self.slo(operand),
-      OpCode::XSRE  =>  self.sre(operand),
-      OpCode::STA   =>  self.sta(operand),
-      OpCode::STX   =>  self.stx(operand),
-      OpCode::STY   =>  self.sty(operand),
-      OpCode::XTAS  =>  self.tas(operand),
-      OpCode::TAX   =>  self.tax(),
-      OpCode::TAY   =>  self.tay(),
-      OpCode::TSX   =>  self.tsx(),
-      OpCode::TXA   =>  self.txa(),
-      OpCode::TXS   =>  self.txs(),
-      OpCode::TYA   =>  self.tya(),
-    }
-  }
-
-  pub fn get_operand_addr(&mut self, mode: Addressing) -> OperandAddress {
+  fn get_operand_addr(&mut self, mode: Addressing) -> OperandAddress {
     match mode {
       Addressing::Accumulator => OperandAddress(0, mode, false),
       Addressing::Absolute => OperandAddress(self.readu16(), mode, false),
@@ -328,11 +252,87 @@ impl<'a> CPU<'a> {
     }
   }
 
-  fn update_zero_negative(&mut self, res: u8) {
-    self.registers.change_flag(Flag::Zero, res == 0);
-    self
-      .registers
-      .change_flag(Flag::Negative, (res >> 7) & 0b1 != 0);
+  fn execute_instr(&mut self, opcode: OpCode, operand: Operand) {
+    match opcode {
+      OpCode::ADC   =>  self.adc(operand),
+      OpCode::XALR  =>  self.alr(operand),
+      OpCode::XANC  =>  self.anc(operand),
+      OpCode::AND   =>  self.and(operand),
+      OpCode::XANE  =>  self.ane(operand),
+      OpCode::XARR  =>  self.arr(operand),
+      OpCode::ASL   =>  self.asl(operand),
+      OpCode::BCC   =>  self.bcc(operand),
+      OpCode::BCS   =>  self.bcs(operand),
+      OpCode::BEQ   =>  self.beq(operand),
+      OpCode::BIT   =>  self.bit(operand),
+      OpCode::BMI   =>  self.bmi(operand),
+      OpCode::BNE   =>  self.bne(operand),
+      OpCode::BPL   =>  self.bpl(operand),
+      OpCode::BRK   =>  self.brk(),
+      OpCode::BVC   =>  self.bvc(operand),
+      OpCode::BVS   =>  self.bvs(operand),
+      OpCode::CLC   =>  self.clc(),
+      OpCode::CLD   =>  self.cld(),
+      OpCode::CLI   =>  self.cli(),
+      OpCode::CLV   =>  self.clv(),
+      OpCode::CMP   =>  self.cmp(operand),
+      OpCode::CPX   =>  self.cpx(operand),
+      OpCode::CPY   =>  self.cpy(operand),
+      OpCode::XDCP  =>  self.dcp(operand),
+      OpCode::DEC   =>  self.dec(operand),
+      OpCode::DEX   =>  self.dex(),
+      OpCode::DEY   =>  self.dey(),
+      OpCode::EOR   =>  self.eor(operand),
+      OpCode::INC   =>  self.inc(operand),
+      OpCode::INX   =>  self.inx(),
+      OpCode::INY   =>  self.iny(),
+      OpCode::XISC  =>  self.isc(operand),
+      OpCode::JAM   =>  panic!("Console was jammed, please reboot."),
+      OpCode::JMP   =>  self.jmp(operand),
+      OpCode::JSR   =>  self.jsr(operand),
+      OpCode::XLAS  =>  self.las(operand),
+      OpCode::XLAX  =>  self.lax(operand),
+      OpCode::LDA   =>  self.lda(operand),
+      OpCode::LDX   =>  self.ldx(operand),
+      OpCode::LDY   =>  self.ldy(operand),
+      OpCode::LSR   =>  self.lsr(operand),
+      OpCode::XLXA  =>  self.lxa(operand),
+      OpCode::NOP   =>  self.nop(),
+      OpCode::XNOP  =>  self.nop(),
+      OpCode::ORA   =>  self.ora(operand),
+      OpCode::PHA   =>  self.pha(),
+      OpCode::PHP   =>  self.php(),
+      OpCode::PLA   =>  self.pla(),
+      OpCode::PLP   =>  self.plp(),
+      OpCode::XRLA  =>  self.rla(operand),
+      OpCode::ROL   =>  self.rol(operand),
+      OpCode::ROR   =>  self.ror(operand),
+      OpCode::XRRA  =>  self.rra(operand),
+      OpCode::RTI   =>  self.rti(),
+      OpCode::RTS   =>  self.rts(),
+      OpCode::XSAX  =>  self.sax(operand),
+      OpCode::SBC   =>  self.sbc(operand),
+      OpCode::XSBC  =>  self.sbc(operand),
+      OpCode::XSBX  =>  self.sbx(operand),
+      OpCode::SEC   =>  self.sec(),
+      OpCode::SED   =>  self.sed(),
+      OpCode::SEI   =>  self.sei(),
+      OpCode::XSHA  =>  self.sha(operand),
+      OpCode::XSHX  =>  self.shx(operand),
+      OpCode::XSHY  =>  self.shy(operand),
+      OpCode::XSLO  =>  self.slo(operand),
+      OpCode::XSRE  =>  self.sre(operand),
+      OpCode::STA   =>  self.sta(operand),
+      OpCode::STX   =>  self.stx(operand),
+      OpCode::STY   =>  self.sty(operand),
+      OpCode::XTAS  =>  self.tas(operand),
+      OpCode::TAX   =>  self.tax(),
+      OpCode::TAY   =>  self.tay(),
+      OpCode::TSX   =>  self.tsx(),
+      OpCode::TXA   =>  self.txa(),
+      OpCode::TXS   =>  self.txs(),
+      OpCode::TYA   =>  self.tya(),
+    }
   }
 
   fn adc(&mut self, Operand(_, data): Operand) {
@@ -361,10 +361,9 @@ impl<'a> CPU<'a> {
 
   fn anc(&mut self, operand: Operand) {
     self.and(operand);
-    self.registers.change_flag(
-      Flag::Carry,
-      (self.registers.get(Register::A) >> 7) & 0b1 != 0,
-    );
+    self
+      .registers
+      .change_flag(Flag::Carry, self.registers.get(Register::A) & 0x80 == 0x80);
   }
 
   fn and(&mut self, Operand(_, data): Operand) {
@@ -384,17 +383,15 @@ impl<'a> CPU<'a> {
     self.and(operand);
     self.ror(operand);
 
-    let b5 = (self.registers.get(Register::A) >> 5) & 1;
-    let b6 = (self.registers.get(Register::A) >> 6) & 1;
+    let b5 = self.registers.get(Register::A) & 0x20 == 0x20;
+    let b6 = self.registers.get(Register::A) & 0x40 == 0x40;
 
-    self.registers.change_flag(Flag::Carry, b5 != 0);
-    self.registers.change_flag(Flag::Overflow, b5 ^ b6 != 0);
+    self.registers.change_flag(Flag::Carry, b5);
+    self.registers.change_flag(Flag::Overflow, b5 ^ b6);
   }
 
   fn asl(&mut self, Operand(OperandAddress(addr, mode, _), data): Operand) {
-    self
-      .registers
-      .change_flag(Flag::Carry, (data >> 7) & 0b1 != 0);
+    self.registers.change_flag(Flag::Carry, data & 0x80 == 0x80);
     self.update_zero_negative(data << 1);
 
     match mode {
@@ -434,10 +431,10 @@ impl<'a> CPU<'a> {
       .change_flag(Flag::Zero, data & self.registers.get(Register::A) == 0);
     self
       .registers
-      .change_flag(Flag::Overflow, (data >> 6) & 0b1 != 0);
+      .change_flag(Flag::Overflow, data & 0x40 == 0x40);
     self
       .registers
-      .change_flag(Flag::Negative, (data >> 7) & 0b1 != 0);
+      .change_flag(Flag::Negative, data & 0x80 == 0x80);
   }
 
   fn bmi(&mut self, Operand(OperandAddress(addr, _, _), _): Operand) {
@@ -609,7 +606,7 @@ impl<'a> CPU<'a> {
   }
 
   fn lsr(&mut self, Operand(OperandAddress(addr, mode, _), data): Operand) {
-    self.registers.change_flag(Flag::Carry, data & 0b1 != 0);
+    self.registers.change_flag(Flag::Carry, data & 0x01 == 0x01);
     self.update_zero_negative(data >> 1);
 
     match mode {
@@ -644,7 +641,7 @@ impl<'a> CPU<'a> {
   }
 
   fn php(&mut self) {
-    let status = self.registers.get(Register::P) | (0b11 << 4);
+    let status = self.registers.get(Register::P) | 0x30;
     self.stack_push(status);
   }
 
@@ -655,7 +652,7 @@ impl<'a> CPU<'a> {
   }
 
   fn plp(&mut self) {
-    let status = (self.stack_pop() | (1 << 5)) & !(1 << 4);
+    let status = self.stack_pop() & 0xEF | 0x20;
     self.registers.set(Register::P, status);
   }
 
@@ -666,11 +663,9 @@ impl<'a> CPU<'a> {
 
   fn rol(&mut self, Operand(OperandAddress(addr, mode, _), data): Operand) {
     let prev_carry = self.registers.get_flag(Flag::Carry);
-    self
-      .registers
-      .change_flag(Flag::Carry, (data >> 7) & 0b1 != 0);
+    self.registers.change_flag(Flag::Carry, data & 0x80 == 0x80);
 
-    let res = (data << 1) |  (prev_carry as u8);
+    let res = (data << 1) | (prev_carry as u8);
     self.update_zero_negative(res);
 
     match mode {
@@ -685,9 +680,9 @@ impl<'a> CPU<'a> {
 
   fn ror(&mut self, Operand(OperandAddress(addr, mode, _), data): Operand) {
     let prev_carry = self.registers.get_flag(Flag::Carry);
-    self.registers.change_flag(Flag::Carry, data & 0b1 != 0);
+    self.registers.change_flag(Flag::Carry, data & 0x01 == 0x01);
 
-    let res = (data >> 1) | if prev_carry { 1 << 7 } else { 0 };
+    let res = (data >> 1) | (prev_carry as u8) << 7;
     self.update_zero_negative(res);
 
     match mode {
@@ -707,9 +702,7 @@ impl<'a> CPU<'a> {
 
   fn rti(&mut self) {
     let status = self.stack_pop();
-    self
-      .registers
-      .set(Register::P, (status | (1 << 5)) & !(1 << 4));
+    self.registers.set(Register::P, status & 0xEF | 0x20);
 
     let pc = self.stack_popu16();
     self.registers.set_pc(pc);
@@ -741,7 +734,7 @@ impl<'a> CPU<'a> {
       .change_flag(Flag::Carry, (res as u16) < raw_res);
     self.registers.change_flag(
       Flag::Overflow,
-      (res ^ self.registers.get(Register::A)) & (res ^ val) & 0x80 != 0,
+      (res ^ self.registers.get(Register::A)) & (res ^ val) & 0x80 != 0x00,
     );
 
     self.registers.set(Register::A, res);
