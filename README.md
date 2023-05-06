@@ -1,2 +1,2 @@
-# My NES Emulator!
-Just started here~
+# NeoNES
+An NES emulator I have written in Rust!

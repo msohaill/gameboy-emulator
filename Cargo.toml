@@ -1,9 +1,11 @@
 [package]
-name = "nes-emulator"
+name = "neones"
 version = "0.1.0"
+authors = ["Muhamamd Sohail <mhsohail56@gmail.com>"]
+license = "MIT"
+repository = "https://github.com/msohaill/neones"
+readme = "README.md"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 sdl2 = "^0.35.2"
