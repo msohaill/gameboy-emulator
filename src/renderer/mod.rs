@@ -4,7 +4,7 @@ pub mod palette;
 pub mod viewport;
 
 use super::bus::cartridge::Mirroring;
-use super::ppu::{register::controller::Flag as ControllerFlag, PPU};
+use super::ppu::PPU;
 use frame::Frame;
 use palette::PALETTE;
 use viewport::Viewport;
@@ -41,11 +41,7 @@ fn sprite_palette(ppu: &PPU, palette_index: u8) -> [usize; 4] {
 }
 
 fn render_name_table(ppu: &PPU, frame: &mut Frame, name_table: &[u8], viewport: Viewport) {
-  let bank = 0x1000
-    * (ppu
-      .registers
-      .controller
-      .get_flag(ControllerFlag::BackgroundAddr) as u16);
+  let bank = ppu.registers.controller.background_pattern_table();
 
   let attribute_table = &name_table[0x3C0..0x400];
 
@@ -145,11 +141,7 @@ pub fn render(ppu: &PPU, frame: &mut Frame) {
     let palette_index = ppu.oam[i + 2] & 0b11;
     let sprite_palette = sprite_palette(ppu, palette_index);
 
-    let bank = 0x1000
-      * (ppu
-        .registers
-        .controller
-        .get_flag(ControllerFlag::SpriteAddr) as u16);
+    let bank = ppu.registers.controller.sprite_pattern_table();
 
     let tile = &ppu.chr[(bank + tile * 16) as usize..=(bank + tile * 16 + 15) as usize];
 
