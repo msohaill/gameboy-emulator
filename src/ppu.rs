@@ -208,13 +208,6 @@ impl PPU {
       .write_oam_addr(self.registers.oam_address.wrapping_add(1));
   }
 
-  pub fn write_oam_dma(&mut self, buffer: &[u8; 0x100]) {
-    for x in buffer.iter() {
-      self.oam[self.registers.oam_address as usize] = *x;
-      self.registers.oam_address = self.registers.oam_address.wrapping_add(1);
-    }
-  }
-
   fn read_status(&mut self) -> u8 {
     let res = self.registers.status.get();
 

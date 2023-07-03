@@ -47,7 +47,7 @@ impl<'a> System<'a> {
       System::ROM..=System::ROM_END => self.read_prg(addr),
       System::JOYPAD1 => self.joypad.read(),
       System::JOYPAD2 => 0, // Ignoring for now
-      0x4000..=0x4015 => 0, // Ignoring APU for now
+      0x4000..=0x4013 | 0x4015 => 0, // Ignoring APU for now
       _ => {
         println!("Ignoring read: {:#0X}", addr);
         0
@@ -60,7 +60,7 @@ impl<'a> System<'a> {
       System::RAM..=System::RAM_END => self.memory.write(addr, data),
       System::PPU..=System::PPU_END => self.ppu.write(addr, data),
       System::ROM..=System::ROM_END => panic!("Attempting to write to cartridge ROM."),
-      System::OAM_REQ => self.oam(data),
+      System::OAM_REQ => self.oamdma(data),
       System::JOYPAD1 => self.joypad.write(data),
       System::JOYPAD2 => (), // Ignoring for now
       0x4000..=0x4013 | 0x4015 => (), // Ignoring APU for now
@@ -92,15 +92,12 @@ impl<'a> System<'a> {
     }
   }
 
-  fn oam(&mut self, data: u8) {
-    let mut buffer: [u8; 0x100] = [0; 0x100];
-
+  fn oamdma(&mut self, data: u8) {
     let hi: u16 = (data as u16) << 8;
-    for i in 0..0x100 {
-      buffer[i as usize] = self.read(hi + i);
+    for lo in 0x0..0x100 {
+      let val = self.read(hi | lo);
+      self.ppu.write(0x2004, val);
     }
-
-    self.ppu.write_oam_dma(&buffer);
   }
 
   fn read_prg(&self, addr: u16) -> u8 {
