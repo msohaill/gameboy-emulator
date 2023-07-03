@@ -4,14 +4,17 @@ pub struct Interrupt {
   pub mask: u8,
   pub cycles: u8,
 }
-pub const NMI: Interrupt = Interrupt {
-  read_address: 0xFFFA,
-  mask: 0b00100000,
-  cycles: 2,
-};
 
-pub const BRK: Interrupt = Interrupt {
-  read_address: 0xFFFE,
-  mask: 0b00110000,
-  cycles: 1,
-};
+impl Interrupt {
+  pub const NMI: Interrupt = Interrupt {
+    read_address: 0xFFFA,
+    mask: 0b00100000,
+    cycles: 2,
+  };
+
+  pub const BRK: Interrupt = Interrupt {
+    read_address: 0xFFFE,
+    mask: 0b00110000,
+    cycles: 1,
+  };
+}

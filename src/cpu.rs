@@ -4,7 +4,7 @@ pub mod register;
 
 use crate::system::System;
 use instruction::{Addressing, Instruction, OpCode, Operand, OperandAddress};
-use interrupt::{Interrupt, BRK, NMI};
+use interrupt::Interrupt;
 use register::{Flag, Register, Registers};
 
 pub struct CPU<'a> {
@@ -44,7 +44,7 @@ impl<'a> CPU<'a> {
     loop {
       if self.system.poll_nmi() {
         self.system.clear_nmi();
-        self.interrupt(NMI);
+        self.interrupt(Interrupt::NMI);
       }
 
       callback(self);
@@ -61,7 +61,7 @@ impl<'a> CPU<'a> {
   }
 
   fn interrupt(&mut self, interrupt: Interrupt) {
-    if self.registers.get_flag(Flag::InterruptDisable) && (interrupt == BRK) {
+    if self.registers.get_flag(Flag::InterruptDisable) && (interrupt == Interrupt::BRK) {
       return;
     }
 
@@ -97,10 +97,6 @@ impl<'a> CPU<'a> {
   }
 
   fn stack_push(&mut self, data: u8) {
-    if self.registers.get(Register::SP) == 0 {
-      panic!("Attempted to store beyone stack capacity.");
-    }
-
     self.system.write(
       CPU::STACK_START.wrapping_add(self.registers.get(Register::SP) as u16),
       data,
@@ -112,10 +108,6 @@ impl<'a> CPU<'a> {
   }
 
   fn stack_pop(&mut self) -> u8 {
-    if self.registers.get(Register::SP) == 0x1E {
-      panic!("Attempted to pop empty stack");
-    }
-
     self.registers.set(
       Register::SP,
       self.registers.get(Register::SP).wrapping_add(1),
@@ -460,7 +452,7 @@ impl<'a> CPU<'a> {
 
   fn brk(&mut self) {
     self.increment_pc(1);
-    self.interrupt(BRK);
+    self.interrupt(Interrupt::BRK);
   }
 
   fn bvc(&mut self, Operand(OperandAddress(addr, _, _), _): Operand) {
