@@ -7,16 +7,16 @@ use instruction::{Addressing, Instruction, OpCode, Operand, OperandAddress};
 use interrupt::Interrupt;
 use register::{Flag, Register, Registers};
 
-pub struct CPU<'a> {
-  pub registers: Registers,
-  pub system: System<'a>,
+pub struct CPU {
+  registers: Registers,
+  system: System,
   branched: bool,
 }
 
-impl<'a> CPU<'a> {
+impl CPU {
   const STACK_START: u16 = 0x0100;
 
-  pub fn new<'b>(system: System<'b>) -> CPU<'b> {
+  pub fn new(system: System) -> Self {
     CPU {
       registers: Registers::new(),
       system,
@@ -29,25 +29,17 @@ impl<'a> CPU<'a> {
     self.registers.set_pc(self.system.readu16(0xFFFC));
   }
 
-  pub fn start<F>(&mut self, callback: F)
-  where
-    F: FnMut(&mut CPU),
-  {
+  pub fn start(&mut self) {
     self.reset();
-    self.run(callback);
+    self.run();
   }
 
-  fn run<F>(&mut self, mut callback: F)
-  where
-    F: FnMut(&mut CPU),
-  {
+  fn run(&mut self) {
     loop {
       if self.system.poll_nmi() {
         self.system.clear_nmi();
         self.interrupt(Interrupt::NMI);
       }
-
-      callback(self);
 
       let instruction = Instruction::get(self.read());
       let operand = self.get_operand(instruction.mode, instruction.needs_data());
@@ -55,7 +47,6 @@ impl<'a> CPU<'a> {
       self.execute_instr(instruction.opcode, operand);
 
       let cycles = instruction.cycles + instruction.extra * (operand.0.2 as u8) + self.branched();
-
       self.system.tick(cycles);
     }
   }

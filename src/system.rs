@@ -3,19 +3,20 @@ pub mod memory;
 
 use crate::joypad::Joypad;
 use crate::ppu::PPU;
+use crate::renderer::Renderer;
 use cartridge::Cartridge;
 use memory::Memory;
 
-pub struct System<'call> {
+pub struct System {
+  pub ppu: PPU,
   pub joypad: Joypad,
-  callback: Box<dyn FnMut(&PPU, &mut Joypad) + 'call>,
+  pub renderer: Renderer,
   cycles: usize,
   memory: Memory,
   prg: Vec<u8>,
-  ppu: PPU,
 }
 
-impl<'a> System<'a> {
+impl System {
   pub const RAM: u16 = 0x0000;
   pub const RAM_END: u16 = 0x1FFF;
   pub const PPU: u16 = 0x2000;
@@ -26,17 +27,14 @@ impl<'a> System<'a> {
   pub const JOYPAD1: u16 = 0x4016;
   pub const JOYPAD2: u16 = 0x4017;
 
-  pub fn new<'call, F>(cartridge: Cartridge, callback: F) -> System<'call>
-  where
-    F: FnMut(&PPU, &mut Joypad) + 'call,
-  {
+  pub fn new(cartridge: Cartridge) -> Self {
     System {
+      ppu: PPU::new(cartridge.chr, cartridge.mirroring),
       joypad: Joypad::new(),
-      callback: Box::from(callback),
+      renderer: Renderer::new(),
       cycles: 0,
       memory: Memory::new(),
       prg: cartridge.prg,
-      ppu: PPU::new(cartridge.chr, cartridge.mirroring),
     }
   }
 
@@ -46,7 +44,7 @@ impl<'a> System<'a> {
       System::PPU..=System::PPU_END => self.ppu.read(addr),
       System::ROM..=System::ROM_END => self.read_prg(addr),
       System::JOYPAD1 => self.joypad.read(),
-      System::JOYPAD2 => 0, // Ignoring for now
+      System::JOYPAD2 => 0,          // Ignoring for now
       0x4000..=0x4013 | 0x4015 => 0, // Ignoring APU for now
       _ => {
         println!("Ignoring read: {:#0X}", addr);
@@ -62,7 +60,7 @@ impl<'a> System<'a> {
       System::ROM..=System::ROM_END => panic!("Attempting to write to cartridge ROM."),
       System::OAM_REQ => self.oamdma(data),
       System::JOYPAD1 => self.joypad.write(data),
-      System::JOYPAD2 => (), // Ignoring for now
+      System::JOYPAD2 => (),          // Ignoring for now
       0x4000..=0x4013 | 0x4015 => (), // Ignoring APU for now
       _ => println!("Ignoring write: {:#0X}", addr),
     }
@@ -88,7 +86,7 @@ impl<'a> System<'a> {
     self.ppu.tick(3 * cycles);
 
     if !nmi_status && self.ppu.nmi_interrupt {
-      (self.callback)(&self.ppu, &mut self.joypad)
+      Renderer::render(self);
     }
   }
 

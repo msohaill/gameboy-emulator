@@ -13,7 +13,8 @@ pub struct Cartridge {
 impl Cartridge {
   const NES_TAG: [u8; 4] = [0x4E, 0x45, 0x53, 0x1A];
 
-  pub fn new(raw: &Vec<u8>) -> Result<Cartridge, &'static str> {
+  pub fn new(path: &'static str) -> Result<Cartridge, &'static str> {
+    let raw = &std::fs::read(path).unwrap();
     let header = &raw[0..16];
     let flags_6 = header[6];
     let flags_7 = header[7];
