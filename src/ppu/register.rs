@@ -107,53 +107,36 @@ impl Registers {
     self.latch = true;
   }
 
-  pub fn end_vblank(&mut self) {
+  pub fn transfer_v(&mut self) {
     // v: GHIA.BC DEF..... <- t: GHIA.BC DEF.....
     self.v = (self.v & 0x841F) | (self.t & 0x7BE0);
   }
 
   pub fn increment_x(&mut self) {
-    // if coarse x == 31
-    if self.v & 0x1F == 0x1F {
-      // coarse x = 0
-      self.v &= !0x1F;
-
-      // switch horizontal nametable
-      self.v ^= 0x0400;
+    if self.v & 0x1F == 0x1F {                  // if coarse x == 31
+      self.v &= !0x1F;                          // coarse x = 0
+      self.v ^= 0x0400;                         // switch horizontal nametable
     } else {
-      // coarse x++
-      self.v += 1;
+      self.v += 1;                              // coarse x++
     }
   }
 
   pub fn increment_y(&mut self) {
-    // if fine y < 7
-    if self.v & 0x7000 != 0x7000 {
-      // fine y++
-      self.v += 0x1000
+    if self.v & 0x7000 != 0x7000 {              // if fine y < 7
+      self.v += 0x1000                          // fine y++
     } else {
-      // fine y = 0
-      self.v &= !0x7000;
-
-      // y = coarse y
-      let mut y = (self.v & 0x03E0) >> 5;
+      self.v &= !0x7000;                        // fine y = 0
+      let mut y = (self.v & 0x03E0) >> 5;  // y = coarse y
 
       if y == 0x1D {
-        // coarse y = 0
-        y = 0;
-
-        // switch vertical nametable
-        self.v ^= 0x0800;
+        y = 0;                                  // coarse y = 0
+        self.v ^= 0x0800;                       // switch vertical nametable
       } else if y == 0x1F {
-        // coarse y = 0, no switch
-        y = 0
+        y = 0                                   // coarse y = 0, no switch
       } else {
-        // coarse y++
-        y += 1;
+        y += 1;                                 // coarse y++
       }
-
-      // restore coarse y
-      self.v = (self.v & !0x03E0) | (y << 5);
+      self.v = (self.v & !0x03E0) | (y << 5);   // restore coarse y
     }
   }
 

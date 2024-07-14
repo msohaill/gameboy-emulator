@@ -4,7 +4,6 @@ pub mod palette;
 pub mod register;
 pub mod state;
 
-use crate::system::cartridge::Mirroring;
 use crate::system::mapper::Mapper;
 use crate::system::System;
 
@@ -20,7 +19,7 @@ pub struct PPU {
   pub palette: [u8; 0x20],
   pub vram: [u8; 0x800],
   pub oam: [u8; 0x100],
-  pub mapper: Mapper,
+  pub mapper: Box<dyn Mapper>,
   pub frame: Frame,
   pub registers: Registers,
   pub nmi_interrupt: bool,
@@ -36,7 +35,7 @@ impl PPU {
   const VISIBLE_SCANLINES: u16 = 241;
   const SCANLINE_DURATION: usize = 341;
 
-  pub fn new(mapper: Mapper) -> Self {
+  pub fn new(mapper: Box<dyn Mapper>) -> Self {
     PPU {
       mapper,
       palette: [0; 0x20],
@@ -109,9 +108,9 @@ impl PPU {
     let visible   = self.scan.line < PPU::VISIBLE_SCANLINES - 1;
     let render    = prerender || visible;
 
-    let prefetch_cycle  = self.scan.dot >= 321 && self.scan.dot <= 336;
+    let prefetch  = self.scan.dot >= 321 && self.scan.dot <= 336;
     let render_cycle    = self.scan.dot > 0 && self.scan.dot <= Frame::WIDTH;
-    let fetch           = prefetch_cycle || render_cycle;
+    let fetch           = prefetch || render_cycle;
 
     if self.rendering_enabled() {
       if visible && render_cycle {
@@ -132,7 +131,7 @@ impl PPU {
       }
 
       if prerender && self.scan.dot >= 280 && self.scan.dot <= 304 {
-        self.registers.end_vblank();
+        self.registers.transfer_v();
       }
 
       if render {
@@ -242,14 +241,15 @@ impl PPU {
   }
 
   fn mirror_vram(&self, addr: u16) -> u16 {
-    let index = (addr & 0x2FFF) - 0x2000;
-    let table = index / 0x400;
+    let addr = (addr - 0x2000) % 0x1000;
+    let table = addr / 0x400;
+    let offset = addr % 0x400;
 
-    match (self.mapper.mirroring, table) {
-      (Mirroring::Vertical, 2) | (Mirroring::Vertical, 3) |(Mirroring::Horizontal, 3) => index - 0x800,
-      (Mirroring::Horizontal, 1) | (Mirroring::Horizontal, 2) => index - 0x400,
-      _ => index,
-    }
+    let index = 0x2000
+      + self.mapper.as_ref().mirroring().coeff()[table as usize] * 0x400
+      + offset;
+
+    index % 0x800
   }
 
   fn read_oam_data(&self) -> u8 {

@@ -1,12 +1,8 @@
-use super::mapper::Mapper;
+use super::mapper::{Mapper, Mirroring, from};
 
-#[derive(Clone, Copy)]
-pub enum Mirroring {
-  Vertical, Horizontal, FourScreen
-}
 
 pub struct Cartridge {
-  pub mapper: Mapper
+  pub mapper: Box<dyn Mapper>,
 }
 
 impl Cartridge {
@@ -33,7 +29,8 @@ impl Cartridge {
     let chr_start = header_bytes + trainer_bytes + prg_bytes;
 
     Ok(Cartridge {
-      mapper: Mapper::new(
+      mapper: from(
+        (flags_7 & 0xF0) | (flags_6 >> 4),
         if chr_bytes == 0 { vec![0; 0x2000] } else { raw[chr_start..(chr_start + chr_bytes)].to_vec() },
         raw[prg_start..(prg_start + prg_bytes)].to_vec(),
         match (flags_6 & 0x08 == 0x08, flags_6 & 0x01 == 0x01) {
@@ -41,7 +38,7 @@ impl Cartridge {
           (false, true) => Mirroring::Vertical,
           (false, false) => Mirroring::Horizontal,
         }
-      ), // TODO: Use for mapper determination (flags_7 & 0xF0) | (flags_6 >> 4),
+      ),
     })
   }
 }
