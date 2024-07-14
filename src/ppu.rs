@@ -1,39 +1,53 @@
+pub mod color;
+pub mod frame;
+pub mod palette;
 pub mod register;
+pub mod state;
 
 use crate::system::cartridge::Mirroring;
+use crate::system::mapper::Mapper;
 use crate::system::System;
-use register::Registers;
 
+use frame::Frame;
+use palette::PALETTE;
+use register::Registers;
 use register::controller::Flag as ControllerFlag;
 use register::mask::Flag as MaskFlag;
 use register::status::Flag as StatusFlag;
+use state::{RenderState, SpriteState, State};
 
 pub struct PPU {
-  pub chr: Vec<u8>,
   pub palette: [u8; 0x20],
   pub vram: [u8; 0x800],
   pub oam: [u8; 0x100],
-  pub mirroring: Mirroring,
+  pub mapper: Mapper,
+  pub frame: Frame,
   pub registers: Registers,
   pub nmi_interrupt: bool,
-  cycles: usize,
-  data_buffer: u8,
-  scanline: u16,
+  state: State,
+  scan: RenderState,
+  sprites: SpriteState,
 }
 
+
+
 impl PPU {
-  pub fn new(chr: Vec<u8>, mirroring: Mirroring) -> Self {
+  const TOTAL_SCANLINES: u16 = 262;
+  const VISIBLE_SCANLINES: u16 = 241;
+  const SCANLINE_DURATION: usize = 341;
+
+  pub fn new(mapper: Mapper) -> Self {
     PPU {
-      chr,
-      mirroring,
+      mapper,
       palette: [0; 0x20],
       vram: [0; 0x800],
       oam: [0; 0x100],
+      frame: Frame::new(),
       registers: Registers::new(),
       nmi_interrupt: false,
-      cycles: 0,
-      data_buffer: 0,
-      scanline: 0,
+      state: State::new(),
+      scan: RenderState::new(),
+      sprites: SpriteState::new(),
     }
   }
 
@@ -52,77 +66,121 @@ impl PPU {
 
   pub fn write(&mut self, addr: u16, data: u8) {
     match addr {
-      0x2000 => {
-        let nmi_gen = self.registers.controller.get_flag(ControllerFlag::NMIGen);
-        self.registers.controller.set(data);
-        if !nmi_gen
-          && self.registers.controller.get_flag(ControllerFlag::NMIGen)
-          && self.registers.status.get_flag(StatusFlag::VBLankStarted)
-        {
-          self.nmi_interrupt = true;
-        }
-      }
+      0x2000 => self.nmi_interrupt = self.registers.write_controller(data),
       0x2001 => self.registers.mask.set(data),
       0x2002 => panic!("Illegal write to PPU status register."),
       0x2003 => self.registers.write_oam_addr(data),
       0x2004 => self.write_oam_data(data),
-      0x2005 => self.registers.scroll.write(data),
-      0x2006 => self.registers.address.write(data),
+      0x2005 => self.registers.write_scroll(data),
+      0x2006 => self.registers.write_address(data),
       0x2007 => self.write_data(data),
       0x2008..=System::PPU_END => self.write(addr & 0x2007, data),
       _ => panic!("Illegal PPU write access: {:#0X}", addr),
     }
   }
 
-  pub fn tick(&mut self, cycles: u8) -> bool {
-    self.cycles += cycles as usize;
+  fn clock_tick(&mut self) {
+    if self.rendering_enabled()
+      && self.state.odd && self.scan.line == PPU::TOTAL_SCANLINES - 1
+      && self.scan.dot == PPU::SCANLINE_DURATION - 2 {
+        self.scan.line = 0;
+        self.scan.dot = 0;
+        self.state.odd = false;
+        return;
+    }
 
-    if self.cycles >= 341 {
-      let x = self.oam[3] as usize;
-      let y = self.oam[0] as u16;
+    self.scan.dot += 1;
 
-      if y == self.scanline
-        && x <= self.cycles
-        && self.registers.mask.get_flag(MaskFlag::ShowSprites)
-      {
-        self.registers.status.set_flag(StatusFlag::SpriteZeroHit);
+    if self.scan.dot == PPU::SCANLINE_DURATION {
+      self.scan.dot = 0;
+      self.scan.line += 1;
+
+      if self.scan.line == PPU::TOTAL_SCANLINES {
+        self.scan.line = 0;
+        self.state.odd = !self.state.odd;
+      }
+    }
+  }
+
+  pub fn tick(&mut self) {
+    self.clock_tick();
+
+    let prerender = self.scan.line == PPU::TOTAL_SCANLINES - 1;
+    let visible   = self.scan.line < PPU::VISIBLE_SCANLINES - 1;
+    let render    = prerender || visible;
+
+    let prefetch_cycle  = self.scan.dot >= 321 && self.scan.dot <= 336;
+    let render_cycle    = self.scan.dot > 0 && self.scan.dot <= Frame::WIDTH;
+    let fetch           = prefetch_cycle || render_cycle;
+
+    if self.rendering_enabled() {
+      if visible && render_cycle {
+        self.render_pixel()
       }
 
-      self.cycles -= 341;
-      self.scanline += 1;
+      if render && fetch {
+        self.state.tile <<= 4;
 
-      if self.scanline == 241 {
-        self.registers.status.set_flag(StatusFlag::VBLankStarted);
-        self.registers.status.unset_flag(StatusFlag::SpriteZeroHit);
-
-        if self.registers.controller.get_flag(ControllerFlag::NMIGen) {
-          self.nmi_interrupt = true;
+        match self.scan.dot % 8 {
+          0 => self.store_tile_state(),
+          1 => self.state.nametable = self.fetch_nametable(),
+          3 => self.state.attrtable = self.fetch_attrtable(),
+          5 => self.state.lotile = self.fetch_lotile(),
+          7 => self.state.hitile = self.fetch_hitile(),
+          _ => { } // Nothing to do on even/other cycles
         }
       }
 
-      if self.scanline == 262 {
-        self.scanline = 0;
-        self.nmi_interrupt = false;
+      if prerender && self.scan.dot >= 280 && self.scan.dot <= 304 {
+        self.registers.end_vblank();
+      }
 
-        self.registers.status.unset_flag(StatusFlag::SpriteZeroHit);
-        self.registers.status.unset_flag(StatusFlag::VBLankStarted);
+      if render {
+        if fetch && self.scan.dot % 8 == 0 {
+          self.registers.increment_x();
+        }
 
-        return true;
+        if self.scan.dot == Frame::WIDTH {
+          self.registers.increment_y();
+        }
+
+        if self.scan.dot == Frame::WIDTH + 1 {
+          self.registers.transfer_h();
+        }
       }
     }
 
-    return false;
+    if self.rendering_enabled() && self.scan.dot == Frame::WIDTH + 1 {
+      if visible {
+        self.evaluate_sprites();
+      } else {
+        self.sprites.count = 0;
+      }
+    }
+
+    if self.scan.line == PPU::VISIBLE_SCANLINES && self.scan.dot == 1 {
+      self.registers.status.set_flag(StatusFlag::VBLankStarted);
+
+      if self.registers.controller.get_flag(ControllerFlag::NMIGen) {
+        self.nmi_interrupt = true;
+      }
+    }
+
+    if prerender && self.scan.dot == 1 {
+      self.registers.status.unset_flag(StatusFlag::SpriteZeroHit);
+      self.registers.status.unset_flag(StatusFlag::SpriteOverflow);
+      self.registers.status.unset_flag(StatusFlag::VBLankStarted);
+    }
   }
 
   fn read_data(&mut self) -> u8 {
-    let addr = self.registers.address.read();
+    let addr = self.registers.read_address();
     self
       .registers
-      .address
-      .increment(self.registers.controller.vram_increment());
+      .increment_address(self.registers.controller.vram_increment());
 
     match addr {
-      0x0..=0x1FFF => self.chr_read(addr),
+      0x0000..=0x1FFF => self.mapper_read(addr),
       0x2000..=0x2FFF => self.vram_read(addr),
       0x3000..=0x3EFF => panic!(
         "Address space 0x3000..0x3EFF is not expected to be used. Requested = {:#0X} ",
@@ -134,14 +192,13 @@ impl PPU {
   }
 
   fn write_data(&mut self, data: u8) {
-    let addr = self.registers.address.read();
+    let addr = self.registers.read_address();
     self
       .registers
-      .address
-      .increment(self.registers.controller.vram_increment());
+      .increment_address(self.registers.controller.vram_increment());
 
     match addr {
-      0x0..=0x1FFF => panic!("Illegal write to CHR ROM: {:#0X}", addr),
+      0x0000..=0x1FFF => self.mapper.write(addr, data),
       0x2000..=0x2FFF => self.vram_write(addr, data),
       0x3000..=0x3EFF => panic!(
         "Address space 0x3000..0x3EFF is not expected to be used. Requested = {:#0X} ",
@@ -152,15 +209,15 @@ impl PPU {
     };
   }
 
-  fn chr_read(&mut self, addr: u16) -> u8 {
-    let res = self.data_buffer;
-    self.data_buffer = self.chr[addr as usize];
+  fn mapper_read(&mut self, addr: u16) -> u8 {
+    let res = self.state.buffer;
+    self.state.buffer = self.mapper.read(addr);
     res
   }
 
   fn vram_read(&mut self, addr: u16) -> u8 {
-    let res = self.data_buffer;
-    self.data_buffer = self.vram[self.mirror_vram(addr) as usize];
+    let res = self.state.buffer;
+    self.state.buffer = self.vram[self.mirror_vram(addr) as usize];
     res
   }
 
@@ -172,7 +229,7 @@ impl PPU {
     match addr {
       0x3F10 | 0x3F14 | 0x3F18 | 0x3F1C => self.palette[(addr - 0x10 - 0x3F00) as usize],
       0x3F00..=0x3FFF => self.palette[(addr - 0x3F00) as usize],
-      _ => panic!("Illegal palette table write: {:#0X}", addr),
+      _ => panic!("Illegal palette table read: {:#0X}", addr),
     }
   }
 
@@ -188,11 +245,9 @@ impl PPU {
     let index = (addr & 0x2FFF) - 0x2000;
     let table = index / 0x400;
 
-    match (self.mirroring, table) {
-      (Mirroring::Vertical, 2) | (Mirroring::Vertical, 3) => index - 0x800,
-      (Mirroring::Horizontal, 1) => index - 0x400,
-      (Mirroring::Horizontal, 2) => index - 0x400,
-      (Mirroring::Horizontal, 3) => index - 0x800,
+    match (self.mapper.mirroring, table) {
+      (Mirroring::Vertical, 2) | (Mirroring::Vertical, 3) |(Mirroring::Horizontal, 3) => index - 0x800,
+      (Mirroring::Horizontal, 1) | (Mirroring::Horizontal, 2) => index - 0x400,
       _ => index,
     }
   }
@@ -203,18 +258,219 @@ impl PPU {
 
   fn write_oam_data(&mut self, data: u8) {
     self.oam[self.registers.oam_address as usize] = data;
-    self
-      .registers
-      .write_oam_addr(self.registers.oam_address.wrapping_add(1));
+    self.registers.increment_oam_addr();
   }
 
   fn read_status(&mut self) -> u8 {
     let res = self.registers.status.get();
 
     self.registers.status.unset_flag(StatusFlag::VBLankStarted);
-    self.registers.address.reset();
-    self.registers.scroll.reset();
+    self.registers.reset_latch();
 
     res
+  }
+
+  fn rendering_enabled(&self) -> bool {
+    self.registers.mask.get_flag(MaskFlag::ShowBackground) || self.registers.mask.get_flag(MaskFlag::ShowSprites)
+  }
+
+  fn render_pixel(&mut self) {
+    let x = self.scan.dot - 1;
+    let y = self.scan.line as usize;
+
+    let mut background = self.background_pixel();
+    let (sprite_idx, mut sprite) = self.sprite_pixel();
+
+    if x < 8 {
+      (!self.registers.mask.get_flag(MaskFlag::ShowLeftBackground)).then(|| background = 0);
+      (!self.registers.mask.get_flag(MaskFlag::ShowLeftSprites)).then(|| sprite = 0);
+    }
+
+    let b = background % 4 != 0;
+    let s = sprite % 4 != 0;
+
+    let lo = match (b, s) {
+      (false, false) => 0,
+      (false, true) => (sprite as u16) | 0x10,
+      (true, false) => background as u16,
+      (true, true) => {
+        if self.sprites.indices[sprite_idx] == 0 && x < Frame::WIDTH - 1 {
+          self.registers.status.set_flag(StatusFlag::SpriteZeroHit);
+        }
+
+        if self.sprites.priorities[sprite_idx] == 0 {
+          (sprite as u16) | 0x10
+        } else {
+          background as u16
+        }
+      }
+    };
+
+    let address = 0x3F00 | lo;
+    let color_idx = self.palette_read(address) % 0x40;
+    let color = PALETTE[color_idx as usize];
+    self.frame.set_pixel(x, y, color);
+  }
+
+  fn background_pixel(&self) -> u8 {
+    self.registers.mask.get_flag(MaskFlag::ShowBackground).then(|| {
+      let tile = ((self.state.tile >> 32) as u32) >> ((7 - self.registers.x()) * 4);
+      let color = (tile & 0x0F) as u8;
+      color
+    }).unwrap_or(0)
+  }
+
+  fn sprite_pixel(&self) -> (usize, u8) {
+    self.registers.mask.get_flag(MaskFlag::ShowSprites).then(|| {
+      for i in 0..self.sprites.count {
+        let mut offset = (self.scan.dot as i16 - 1) - self.sprites.positions[i] as i16;
+
+        if offset < 0 || offset > 7 {
+          continue;
+        }
+
+        offset = 7 - offset;
+
+        let color = ((self.sprites.patterns[i] >> (offset * 4)) & 0x0F) as u8;
+
+        if color % 4 == 0 {
+          continue;
+        }
+
+        return (i, color);
+      }
+      return (0, 0);
+    }).unwrap_or((0, 0))
+  }
+
+  fn store_tile_state(&mut self) {
+    let data: u32 = (0 .. 8).fold(0, |acc, _| {
+        let p1 = (self.state.lotile & 0x80) >> 7;
+        let p2 = (self.state.hitile & 0x80) >> 6;
+
+        self.state.lotile <<= 1;
+        self.state.hitile <<= 1;
+
+        let a = self.state.attrtable;
+        let b = (a | p1 | p2) as u32;
+
+        (acc << 4) | b
+    } );
+
+    self.state.tile |= data as u64;
+  }
+
+  fn fetch_nametable(&self) -> u8 {
+    let v = self.registers.read_address();
+    let address = 0x2000 | (v & 0x0FFF);
+    self.vram[self.mirror_vram(address) as usize]
+  }
+
+  fn fetch_attrtable(&self) -> u8 {
+    let v = self.registers.read_address();
+    let address = 0x23C0 | (v & 0x0C00) | ((v >> 4) & 0x0038) | ((v >> 2) & 0x0007);
+    let byte = self.vram[self.mirror_vram(address) as usize];
+    let shift = ((v >> 4) & 0x04) | (v & 0x02);
+    ((byte >> shift) & 0x03) << 2
+  }
+
+  fn fetch_lotile(&self) -> u8 {
+    let y = (self.registers.read_address() >> 12) & 0x07;
+    let tile = self.state.nametable as u16;
+    let address = self.registers.controller.background_pattern_table() + y + (16 * tile);
+    self.mapper.read(address)
+  }
+
+  fn fetch_hitile(&self) -> u8 {
+    let y = (self.registers.read_address() >> 12) & 0x07;
+    let tile = self.state.nametable as u16;
+    let address = self.registers.controller.background_pattern_table() + y + (16 * tile) + 8;
+    self.mapper.read(address)
+  }
+
+  fn evaluate_sprites(&mut self) {
+    let size = self.registers.controller.sprite_size();
+    let mut count = 0;
+
+    for sprite_idx in 0 .. 64 {
+      let y = self.oam[(sprite_idx * 4 + 0) as usize % 0x100];
+      let a = self.oam[(sprite_idx * 4 + 2) as usize % 0x100];
+      let x = self.oam[(sprite_idx * 4 + 3) as usize % 0x100];
+
+      let row = (self.scan.line as i16) - (y as i16);
+
+      if row < 0 || row >= (size as i16) {
+        continue;
+      }
+
+      if count < 8 {
+        self.sprites.patterns[count]    = self.fetch_sprite_patterns(sprite_idx, row);
+        self.sprites.positions[count]   = x;
+        self.sprites.priorities[count]  = (a >> 5) & 0x01;
+        self.sprites.indices[count]     = sprite_idx as usize;
+      }
+
+      count += 1;
+    }
+
+    if count > 8 {
+      count = 8;
+      self.registers.status.set_flag(StatusFlag::SpriteOverflow);
+    }
+
+    self.sprites.count = count;
+  }
+
+  fn fetch_sprite_patterns(&mut self, i: u16, row: i16) -> u32 {
+    let mut tile = self.oam[(i * 4 + 1) as usize % 0x100] as u16;
+    let attrs = self.oam[(i * 4 + 2) as usize % 0x100];
+
+    let mut row = row;
+    let address = if self.registers.controller.sprite_size() == 8 {
+      if attrs & 0x80 == 0x80 {
+        row = 7 - row;
+      }
+
+      self.registers.controller.sprite_pattern_table() + (tile * 16) + row as u16
+    } else {
+      if attrs & 0x80 == 0x80 {
+        row = 15 - row;
+      }
+
+      let table = tile & 1;
+      tile &= 0xFE;
+
+      if row > 7 {
+        tile += 1;
+        row -= 8;
+      }
+
+      0x1000 * table + (tile * 16) + row as u16
+    };
+
+    let a = ((attrs & 0x03) << 2) as u32;
+    let mut lo = self.mapper.read(address) as u32;
+    let mut hi = self.mapper.read(address + 8) as u32;
+
+    (0 .. 8).fold(0, |acc, _| {
+      let p1;
+      let p2;
+
+      // Flip the sprite vertically, so we read from the other end of the
+      // low and high tile bytes
+      if attrs & 0x40 == 0x40 {
+        p1 = (lo & 1) << 0;
+        p2 = (hi & 1) << 1;
+        lo >>= 1;
+        hi >>= 1;
+      } else {
+        p1 = (lo & 0x80) >> 7;
+        p2 = (hi & 0x80) >> 6;
+        lo <<= 1;
+        hi <<= 1;
+      }
+
+      (acc << 4) | (a | p1 | p2)
+    })
   }
 }

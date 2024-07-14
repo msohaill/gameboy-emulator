@@ -1,19 +1,18 @@
+use super::mapper::Mapper;
+
 #[derive(Clone, Copy)]
 pub enum Mirroring {
   Vertical, Horizontal, FourScreen
 }
 
 pub struct Cartridge {
-  pub prg: Vec<u8>,
-  pub chr: Vec<u8>,
-  pub mapper: u8,
-  pub mirroring: Mirroring,
+  pub mapper: Mapper
 }
 
 impl Cartridge {
   const NES_TAG: [u8; 4] = [0x4E, 0x45, 0x53, 0x1A];
 
-  pub fn new(path: &'static str) -> Result<Cartridge, &'static str> {
+  pub fn new(path: String) -> Result<Cartridge, &'static str> {
     let raw = &std::fs::read(path).unwrap();
     let header = &raw[0..16];
     let flags_6 = header[6];
@@ -34,14 +33,15 @@ impl Cartridge {
     let chr_start = header_bytes + trainer_bytes + prg_bytes;
 
     Ok(Cartridge {
-      prg: raw[prg_start..(prg_start + prg_bytes)].to_vec(),
-      chr: raw[chr_start..(chr_start + chr_bytes)].to_vec(),
-      mapper: (flags_7 & 0xF0) | (flags_6 >> 4),
-      mirroring: match (flags_6 & 0x08 == 0x08, flags_6 & 0x01 == 0x01) {
-        (true, _) => Mirroring::FourScreen,
-        (false, true) => Mirroring::Vertical,
-        (false, false) => Mirroring::Horizontal,
-      }
+      mapper: Mapper::new(
+        if chr_bytes == 0 { vec![0; 0x2000] } else { raw[chr_start..(chr_start + chr_bytes)].to_vec() },
+        raw[prg_start..(prg_start + prg_bytes)].to_vec(),
+        match (flags_6 & 0x08 == 0x08, flags_6 & 0x01 == 0x01) {
+          (true, _) => Mirroring::FourScreen,
+          (false, true) => Mirroring::Vertical,
+          (false, false) => Mirroring::Horizontal,
+        }
+      ), // TODO: Use for mapper determination (flags_7 & 0xF0) | (flags_6 >> 4),
     })
   }
 }

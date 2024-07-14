@@ -37,7 +37,6 @@ impl CPU {
   fn run(&mut self) {
     loop {
       if self.system.poll_nmi() {
-        self.system.clear_nmi();
         self.interrupt(Interrupt::NMI);
       }
 
@@ -47,7 +46,7 @@ impl CPU {
       self.execute_instr(instruction.opcode, operand);
 
       let cycles = instruction.cycles + instruction.extra * (operand.0.2 as u8) + self.branched();
-      self.system.tick(cycles);
+      self.system.tick(cycles as u16);
     }
   }
 
@@ -68,7 +67,7 @@ impl CPU {
 
     self.registers.set_flag(Flag::InterruptDisable);
 
-    self.system.tick(interrupt.cycles);
+    self.system.tick(interrupt.cycles as u16);
 
     self
       .registers

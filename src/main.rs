@@ -9,6 +9,7 @@ pub mod utils;
 use neones::NeoNES;
 
 fn main() {
-  let mut nes = NeoNES::new("dev/Super_Mario.nes");
+  let path = std::env::args().nth(1).unwrap_or(String::from("dev/Super_Mario.nes"));
+  let mut nes = NeoNES::new(path);
   nes.start();
 }

@@ -8,7 +8,7 @@ pub struct NeoNES {
 }
 
 impl NeoNES {
-  pub fn new(path: &'static str) -> Self {
+  pub fn new(path: String) -> Self {
     NeoNES {
       cpu: CPU::new(System::new(Cartridge::new(path).unwrap())),
     }

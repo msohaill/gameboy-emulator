@@ -1,4 +1,5 @@
 pub mod cartridge;
+pub mod mapper;
 pub mod memory;
 
 use crate::joypad::Joypad;
@@ -13,7 +14,6 @@ pub struct System {
   pub renderer: Renderer,
   cycles: usize,
   memory: Memory,
-  prg: Vec<u8>,
 }
 
 impl System {
@@ -29,12 +29,11 @@ impl System {
 
   pub fn new(cartridge: Cartridge) -> Self {
     System {
-      ppu: PPU::new(cartridge.chr, cartridge.mirroring),
+      ppu: PPU::new(cartridge.mapper),
       joypad: Joypad::new(),
       renderer: Renderer::new(),
       cycles: 0,
       memory: Memory::new(),
-      prg: cartridge.prg,
     }
   }
 
@@ -42,7 +41,7 @@ impl System {
     match addr {
       System::RAM..=System::RAM_END => self.memory.read(addr),
       System::PPU..=System::PPU_END => self.ppu.read(addr),
-      System::ROM..=System::ROM_END => self.read_prg(addr),
+      System::ROM..=System::ROM_END => self.ppu.mapper.read(addr),
       System::JOYPAD1 => self.joypad.read(),
       System::JOYPAD2 => 0,          // Ignoring for now
       0x4000..=0x4013 | 0x4015 => 0, // Ignoring APU for now
@@ -79,14 +78,20 @@ impl System {
     self.write(addr.wrapping_add(1), hi);
   }
 
-  pub fn tick(&mut self, cycles: u8) {
+  pub fn tick(&mut self, cycles: u16) {
     self.cycles += cycles as usize;
 
-    let nmi_status = self.ppu.nmi_interrupt;
-    self.ppu.tick(3 * cycles);
+    let mut render = false;
+    for _ in 0 .. 3 * cycles {
+      let nmi_status = self.ppu.nmi_interrupt;
+      self.ppu.tick();
+      if !nmi_status && self.ppu.nmi_interrupt {
+        render = true
+      }
+    }
 
-    if !nmi_status && self.ppu.nmi_interrupt {
-      Renderer::render(self);
+    if render {
+      Renderer::update_canvas(self);
     }
   }
 
@@ -96,19 +101,12 @@ impl System {
       let val = self.read(hi | lo);
       self.ppu.write(0x2004, val);
     }
+    self.tick(if self.cycles % 2 == 0 { 513 } else { 514 })
   }
 
-  fn read_prg(&self, addr: u16) -> u8 {
-    let mut index = addr - System::ROM;
-    index %= self.prg.len() as u16;
-    self.prg[index as usize]
-  }
-
-  pub fn poll_nmi(&self) -> bool {
-    self.ppu.nmi_interrupt
-  }
-
-  pub fn clear_nmi(&mut self) {
+  pub fn poll_nmi(&mut self) -> bool {
+    let res = self.ppu.nmi_interrupt;
     self.ppu.nmi_interrupt = false;
+    res
   }
 }
