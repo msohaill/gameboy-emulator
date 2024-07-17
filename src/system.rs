@@ -21,6 +21,10 @@ impl System {
   pub const RAM_END: u16 = 0x1FFF;
   pub const PPU: u16 = 0x2000;
   pub const PPU_END: u16 = 0x3FFF;
+  pub const EROM: u16 = 0x4020;
+  pub const EROM_END: u16 = 0x5FFF;
+  pub const SRAM: u16 = 0x6000;
+  pub const SRAM_END: u16 = 0x7FFF;
   pub const ROM: u16 = 0x8000;
   pub const ROM_END: u16 = 0xFFFF;
   pub const OAM_REQ: u16 = 0x4014;
@@ -41,6 +45,8 @@ impl System {
     match addr {
       System::RAM..=System::RAM_END => self.memory.read(addr),
       System::PPU..=System::PPU_END => self.ppu.read(addr),
+      System::EROM..=System::EROM_END => 0,
+      System::SRAM..=System::SRAM_END => self.ppu.mapper.read(addr),
       System::ROM..=System::ROM_END => self.ppu.mapper.read(addr),
       System::JOYPAD1 => self.joypad.read(),
       System::JOYPAD2 => 0,          // Ignoring for now
@@ -56,7 +62,9 @@ impl System {
     match addr {
       System::RAM..=System::RAM_END => self.memory.write(addr, data),
       System::PPU..=System::PPU_END => self.ppu.write(addr, data),
-      System::ROM..=System::ROM_END => panic!("Attempting to write to cartridge ROM."),
+      System::EROM..=System::EROM_END => { },
+      System::SRAM..=System::SRAM_END => self.ppu.mapper.write(addr, data),
+      System::ROM..=System::ROM_END => self.ppu.mapper.write(addr, data),
       System::OAM_REQ => self.oamdma(data),
       System::JOYPAD1 => self.joypad.write(data),
       System::JOYPAD2 => (),          // Ignoring for now

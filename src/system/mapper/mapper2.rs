@@ -2,16 +2,20 @@ use std::{collections::HashSet, ops::RangeInclusive};
 
 use super::{Mirroring, Mapper};
 
+const PRG_BANK_SIZE: usize = 16384;
 
-pub struct Mapper0 {
+pub struct Mapper2 {
   mirroring: Mirroring,
   chr: Vec<u8>,
   prg_rom: Vec<u8>,
   prg_ram: [u8; 0x2000],
-  ranges: HashSet<RangeInclusive<u16>>
+  ranges: HashSet<RangeInclusive<u16>>,
+
+  first: usize,
+  last: usize,
 }
 
-impl Mapper for Mapper0 {
+impl Mapper for Mapper2 {
   fn mirroring(&self) -> Mirroring {
     self.mirroring
   }
@@ -22,30 +26,36 @@ impl Mapper for Mapper0 {
 
   fn read(&self, addr: u16) -> u8 {
     match addr {
-        0x0000 ..= 0x1FFF => self.chr_read(addr),
-        0x6000 ..= 0x7FFF => self.prg_ram_read(addr),
-        0x8000 ..= 0xFFFF => self.prg_rom_read(addr),
-        _ => 0,
+      0x0000 ..= 0x1FFF => self.chr_read(addr),
+      0x6000 ..= 0x7FFF => self.prg_ram_read(addr),
+      0x8000 ..= 0xBFFF => self.first_read(addr),
+      0xC000 ..= 0xFFFF => self.last_read(addr),
+      _ => 0,
     }
   }
 
   fn write(&mut self, addr: u16, val: u8) {
     match addr {
-        0x0000 ..= 0x1FFF => self.chr_write(addr, val),
-        0x6000 ..= 0x7FFF => self.prg_ram_write(addr, val),
-        _ => { },
+      0x0000 ..= 0x1FFF => self.chr_write(addr, val),
+      0x6000 ..= 0x7FFF => self.prg_ram_write(addr, val),
+      0x8000 ..= 0xFFFF => self.update_first(val),
+      _ => { },
     }
   }
 }
 
-impl Mapper0 {
+impl Mapper2 {
   pub fn new(chr: Vec<u8>, prg_rom: Vec<u8>, mirroring: Mirroring) -> Self {
-    Mapper0 {
+    let last = (prg_rom.len() / PRG_BANK_SIZE) - 1;
+
+    Mapper2 {
       mirroring,
       chr,
       prg_rom,
       prg_ram: [0; 0x2000],
       ranges: HashSet::new(),
+      first: 0,
+      last,
     }
   }
 
@@ -69,9 +79,17 @@ impl Mapper0 {
     self.prg_ram[index] = val;
   }
 
-  fn prg_rom_read(&self, addr: u16) -> u8 {
-    let mut index = addr - 0x8000;
-    index %= self.prg_rom.len() as u16;
-    self.prg_rom[index as usize]
+  fn first_read(&self, addr: u16) -> u8 {
+    let index = (self.first as usize * PRG_BANK_SIZE) + (addr as usize % PRG_BANK_SIZE);
+    self.prg_rom[index]
+  }
+
+  fn last_read(&self, addr: u16) -> u8 {
+    let index = (self.last as usize * PRG_BANK_SIZE) + (addr as usize % PRG_BANK_SIZE);
+    self.prg_rom[index]
+  }
+
+  fn update_first(&mut self, val: u8) {
+    self.first = val as usize & 0x1F;
   }
 }

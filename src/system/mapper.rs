@@ -1,8 +1,12 @@
-pub mod mapper0;
+mod mapper0;
+mod mapper1;
+mod mapper2;
 
 use std::{collections::HashSet, ops::RangeInclusive};
 
 use mapper0::Mapper0;
+use mapper1::Mapper1;
+use mapper2::Mapper2;
 
 
 #[derive(Clone, Copy)]
@@ -10,9 +14,11 @@ pub enum Mirroring {
   Vertical, Horizontal, FourScreen, Single0, Single1,
 }
 
-pub fn from(mapper: u8, chr: Vec<u8>, prg_rom: Vec<u8>, mirrorring: Mirroring) -> Box<dyn Mapper> {
+pub fn from(mapper: u8, chr: Vec<u8>, prg_rom: Vec<u8>, mirroring: Mirroring) -> Box<dyn Mapper> {
   match mapper {
-    0 => Box::from(Mapper0::new(chr, prg_rom, mirrorring)),
+    0 => Box::from(Mapper0::new(chr, prg_rom, mirroring)),
+    1 => Box::from(Mapper1::new(chr, prg_rom, mirroring)),
+    2 => Box::from(Mapper2::new(chr, prg_rom, mirroring)),
     _ => panic!("Unsupported mapper: {}", mapper),
   }
 }
