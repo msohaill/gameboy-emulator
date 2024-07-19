@@ -8,7 +8,7 @@ pub struct Mapper0 {
   chr: Vec<u8>,
   prg_rom: Vec<u8>,
   prg_ram: [u8; 0x2000],
-  ranges: HashSet<RangeInclusive<u16>>
+  ranges: HashSet<RangeInclusive<u16>>,
 }
 
 impl Mapper for Mapper0 {

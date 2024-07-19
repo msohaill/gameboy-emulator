@@ -8,4 +8,4 @@ readme = "README.md"
 edition = "2021"
 
 [dependencies]
-sdl2 = "^0.35.2"
+sdl2 = "^0.37.0"

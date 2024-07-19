@@ -6,8 +6,12 @@ use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::render::{Canvas, TextureCreator};
+use sdl2::rwops::RWops;
+use sdl2::surface::Surface;
 use sdl2::video::{Window, WindowContext};
 use sdl2::EventPump;
+
+const ICON: &[u8] = include_bytes!("../assets/neones.bmp");
 
 pub struct Renderer {
   canvas: Canvas<Window>,
@@ -18,13 +22,15 @@ pub struct Renderer {
 impl Renderer {
   pub fn new() -> Self {
     let sdl_context = sdl2::init().unwrap();
-    let window = sdl_context
+    let mut window = sdl_context
       .video()
       .unwrap()
       .window("NeoNES", (Frame::WIDTH * Frame::SCALE) as u32, (Frame::HEIGHT * Frame::SCALE) as u32)
       .position_centered()
       .build()
       .unwrap();
+
+    window.set_icon(Surface::load_bmp_rw(&mut RWops::from_bytes(ICON).unwrap()).unwrap());
 
     let mut canvas = window.into_canvas().present_vsync().build().unwrap();
     let event_pump = sdl_context.event_pump().unwrap();

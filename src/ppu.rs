@@ -180,13 +180,9 @@ impl PPU {
 
     match addr {
       0x0000..=0x1FFF => self.mapper_read(addr),
-      0x2000..=0x2FFF => self.vram_read(addr),
-      0x3000..=0x3EFF => panic!(
-        "Address space 0x3000..0x3EFF is not expected to be used. Requested = {:#0X} ",
-        addr
-      ),
+      0x2000..=0x3EFF => self.vram_read(addr),
       0x3F00..=0x3FFF => self.palette_read(addr),
-      _ => panic!("Unexpected access to mirrored space {}", addr),
+      _ => panic!("Unexpected read at {:#0x}", addr),
     }
   }
 
@@ -198,13 +194,9 @@ impl PPU {
 
     match addr {
       0x0000..=0x1FFF => self.mapper.write(addr, data),
-      0x2000..=0x2FFF => self.vram_write(addr, data),
-      0x3000..=0x3EFF => panic!(
-        "Address space 0x3000..0x3EFF is not expected to be used. Requested = {:#0X} ",
-        addr
-      ),
+      0x2000..=0x3EFF => self.vram_write(addr, data),
       0x3F00..=0x3FFF => self.palette_write(addr, data),
-      _ => panic!("Unexpected access to mirrored space {}", addr),
+      _ => panic!("Unexpected write at {:#0x}", addr),
     };
   }
 
@@ -225,19 +217,21 @@ impl PPU {
   }
 
   fn palette_read(&self, addr: u16) -> u8 {
-    match addr {
-      0x3F10 | 0x3F14 | 0x3F18 | 0x3F1C => self.palette[(addr - 0x10 - 0x3F00) as usize],
-      0x3F00..=0x3FFF => self.palette[(addr - 0x3F00) as usize],
-      _ => panic!("Illegal palette table read: {:#0X}", addr),
-    }
+    let addr = addr % 0x20;
+    let idx = match addr {
+      0x10 | 0x14 | 0x18 | 0x1C => addr as usize - 0x10,
+      _ => addr as usize,
+    };
+    self.palette[idx]
   }
 
   fn palette_write(&mut self, addr: u16, data: u8) {
-    match addr {
-      0x3F10 | 0x3F14 | 0x3F18 | 0x3F1C => self.palette[(addr - 0x10 - 0x3F00) as usize] = data,
-      0x3F00..=0x3FFF => self.palette[(addr - 0x3F00) as usize] = data,
-      _ => panic!("Illegal palette table access: {:#0X}", addr),
-    }
+    let addr = addr % 0x20;
+    let idx = match addr {
+      0x10 | 0x14 | 0x18 | 0x1C => addr as usize - 0x10,
+      _ => addr as usize,
+    };
+    self.palette[idx] = data;
   }
 
   fn mirror_vram(&self, addr: u16) -> u16 {
