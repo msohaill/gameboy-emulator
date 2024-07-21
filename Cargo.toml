@@ -5,7 +5,8 @@ authors = ["Muhamamd Sohail <mhsohail56@gmail.com>"]
 license = "MIT"
 repository = "https://github.com/msohaill/neones"
 readme = "README.md"
+description = "A lightweight NES emulator written in Rust."
 edition = "2021"
 
 [dependencies]
-sdl2 = "^0.37.0"
+sdl2 = { version = "^0.37.0", features = ["static-link", "bundled"] }
