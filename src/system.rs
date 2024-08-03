@@ -2,6 +2,7 @@ pub mod cartridge;
 pub mod mapper;
 pub mod memory;
 
+use crate::apu::APU;
 use crate::joypad::Joypad;
 use crate::ppu::PPU;
 use crate::renderer::Renderer;
@@ -9,8 +10,9 @@ use cartridge::Cartridge;
 use memory::Memory;
 
 pub struct System {
+  pub apu: APU,
   pub ppu: PPU,
-  pub joypad: Joypad,
+  pub joypads: (Joypad, Joypad),
   pub renderer: Renderer,
   cycles: usize,
   memory: Memory,
@@ -33,8 +35,9 @@ impl System {
 
   pub fn new(cartridge: Cartridge) -> Self {
     System {
+      apu: APU::new(),
       ppu: PPU::new(cartridge.mapper),
-      joypad: Joypad::new(),
+      joypads: (Joypad::new(), Joypad::new()),
       renderer: Renderer::new(),
       cycles: 0,
       memory: Memory::new(),
@@ -48,9 +51,9 @@ impl System {
       System::EROM..=System::EROM_END => 0,
       System::SRAM..=System::SRAM_END => self.ppu.mapper.read(addr),
       System::ROM..=System::ROM_END => self.ppu.mapper.read(addr),
-      System::JOYPAD1 => self.joypad.read(),
-      System::JOYPAD2 => 0,          // Ignoring for now
-      0x4000..=0x4013 | 0x4015 => 0, // Ignoring APU for now
+      System::JOYPAD1 => self.joypads.0.read(),
+      System::JOYPAD2 => self.joypads.1.read(),
+      0x4000..=0x4013 | 0x4015 => self.apu.read(addr),
       _ => {
         println!("Ignoring read: {:#0X}", addr);
         0
@@ -66,9 +69,11 @@ impl System {
       System::SRAM..=System::SRAM_END => self.ppu.mapper.write(addr, data),
       System::ROM..=System::ROM_END => self.ppu.mapper.write(addr, data),
       System::OAM_REQ => self.oamdma(data),
-      System::JOYPAD1 => self.joypad.write(data),
-      System::JOYPAD2 => (),          // Ignoring for now
-      0x4000..=0x4013 | 0x4015 => (), // Ignoring APU for now
+      System::JOYPAD1 => {
+        self.joypads.0.write(data);
+        self.joypads.1.write(data);
+      },
+      0x4000..=0x4013 | 0x4015 | 0x4017 => self.apu.write(addr, data),
       _ => println!("Ignoring write: {:#0X}", addr),
     }
   }
