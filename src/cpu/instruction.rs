@@ -4,7 +4,7 @@ pub enum Addressing {
   IndirectX, IndirectY, Relative, ZeroPage, ZeroPageX, ZeroPageY,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum OpCode {
   // Official
   ADC, AND, ASL, BCC, BCS, BEQ, BIT, BMI, BNE, BPL,
@@ -16,8 +16,8 @@ pub enum OpCode {
 
   // Unofficial
   XALR, XANC, XANE, XARR, XDCP, XISC, XLAS,
-  XLAX, XLXA, XNOP, XRLA, XRRA, XSAX, XSBC,
-  XSBX, XSHA, XSHX, XSHY, XSLO, XSRE, XTAS,
+  XLAX, XNOP, XRLA, XRRA, XSAX, XSBC, XSBX,
+  XSHA, XSHX, XSHY, XSLO, XSRE, XTAS,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -136,7 +136,7 @@ impl Instruction {
       0xDD => Instruction::new(Addressing::AbsoluteX, OpCode::CMP, 4, 1),
       0xD9 => Instruction::new(Addressing::AbsoluteY, OpCode::CMP, 4, 1),
       0xC1 => Instruction::new(Addressing::IndirectX, OpCode::CMP, 6, 0),
-      0xD1 => Instruction::new(Addressing::IndirectY, OpCode::CMP, 5, 0),
+      0xD1 => Instruction::new(Addressing::IndirectY, OpCode::CMP, 5, 1),
 
       // CPX
       0xE0 => Instruction::new(Addressing::Immediate, OpCode::CPX, 2, 0),
@@ -161,7 +161,7 @@ impl Instruction {
       0xC6 => Instruction::new(Addressing::ZeroPage, OpCode::DEC, 5, 0),
       0xD6 => Instruction::new(Addressing::ZeroPageX, OpCode::DEC, 6, 0),
       0xCE => Instruction::new(Addressing::Absolute, OpCode::DEC, 6, 0),
-      0xDE => Instruction::new(Addressing::AbsoluteX, OpCode::DEC, 6, 0),
+      0xDE => Instruction::new(Addressing::AbsoluteX, OpCode::DEC, 7, 0),
 
       // DEX
       0xCA => Instruction::new(Addressing::Implied, OpCode::DEX, 2, 0),
@@ -264,7 +264,7 @@ impl Instruction {
       0x5E => Instruction::new(Addressing::AbsoluteX, OpCode::LSR, 7, 0),
 
       // *LXA
-      0xAB => Instruction::new(Addressing::Immediate, OpCode::XLXA, 2, 0),
+      0xAB => Instruction::new(Addressing::Immediate, OpCode::XLAX, 2, 0),
 
       // NOP
       0xEA => Instruction::new(Addressing::Implied, OpCode::NOP, 2, 0),
@@ -394,10 +394,10 @@ impl Instruction {
       0x93 => Instruction::new(Addressing::IndirectY, OpCode::XSHA, 6, 0),
 
       // *SHX
-      0x9C => Instruction::new(Addressing::AbsoluteY, OpCode::XSHX, 5, 0),
+      0x9E => Instruction::new(Addressing::AbsoluteY, OpCode::XSHX, 5, 0),
 
       // *SHY
-      0x9E => Instruction::new(Addressing::AbsoluteX, OpCode::XSHY, 5, 0),
+      0x9C => Instruction::new(Addressing::AbsoluteX, OpCode::XSHY, 5, 0),
 
       // *SLO
       0x07 => Instruction::new(Addressing::ZeroPage, OpCode::XSLO, 5, 0),

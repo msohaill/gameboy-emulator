@@ -22,13 +22,52 @@ pub struct PPU {
   pub mapper: Box<dyn Mapper>,
   pub frame: Frame,
   pub registers: Registers,
-  pub nmi_interrupt: bool,
+  nmi: NMI,
   state: State,
   scan: RenderState,
   sprites: SpriteState,
 }
 
+pub struct NMI {
+  pending: bool,
+  delay: u8,
+  prev: bool,
+}
 
+impl NMI {
+  fn new() -> Self {
+    NMI {
+      pending: false,
+      delay: 0,
+      prev: false,
+    }
+  }
+
+  // @fogleman hack
+  fn change(&mut self, occurred: bool, enabled: bool) {
+    let curr = enabled && occurred;
+    if curr && !self.prev {
+      self.delay = 15;
+    }
+    self.prev = curr;
+  }
+
+  pub fn poll(&mut self) -> bool {
+    let res = self.pending;
+    self.pending = false;
+    res
+  }
+
+  fn tick(&mut self) {
+    if self.delay > 0 {
+      self.delay -= 1;
+
+      if self.delay == 0 {
+          self.pending = true;
+      }
+  }
+  }
+}
 
 impl PPU {
   const TOTAL_SCANLINES: u16 = 262;
@@ -43,7 +82,7 @@ impl PPU {
       oam: [0; 0x100],
       frame: Frame::new(),
       registers: Registers::new(),
-      nmi_interrupt: false,
+      nmi: NMI::new(),
       state: State::new(),
       scan: RenderState::new(),
       sprites: SpriteState::new(),
@@ -65,7 +104,10 @@ impl PPU {
 
   pub fn write(&mut self, addr: u16, data: u8) {
     match addr {
-      0x2000 => self.nmi_interrupt = self.registers.write_controller(data),
+      0x2000 => {
+        let occurred = self.registers.write_controller(data);
+        self.nmi(occurred);
+      }
       0x2001 => self.registers.mask.set(data),
       0x2002 => panic!("Illegal write to PPU status register."),
       0x2003 => self.registers.write_oam_addr(data),
@@ -79,6 +121,8 @@ impl PPU {
   }
 
   fn clock_tick(&mut self) {
+    self.nmi.tick();
+
     if self.rendering_enabled()
       && self.state.odd && self.scan.line == PPU::TOTAL_SCANLINES - 1
       && self.scan.dot == PPU::SCANLINE_DURATION - 2 {
@@ -101,7 +145,7 @@ impl PPU {
     }
   }
 
-  pub fn tick(&mut self) {
+  pub fn tick(&mut self) -> bool {
     self.clock_tick();
 
     let prerender = self.scan.line == PPU::TOTAL_SCANLINES - 1;
@@ -160,16 +204,18 @@ impl PPU {
     if self.scan.line == PPU::VISIBLE_SCANLINES && self.scan.dot == 1 {
       self.registers.status.set_flag(StatusFlag::VBLankStarted);
 
-      if self.registers.controller.get_flag(ControllerFlag::NMIGen) {
-        self.nmi_interrupt = true;
-      }
+        self.nmi(true);
+      return true;
     }
 
     if prerender && self.scan.dot == 1 {
+      self.nmi(false);
       self.registers.status.unset_flag(StatusFlag::SpriteZeroHit);
       self.registers.status.unset_flag(StatusFlag::SpriteOverflow);
       self.registers.status.unset_flag(StatusFlag::VBLankStarted);
     }
+
+    return false;
   }
 
   fn read_data(&mut self) -> u8 {
@@ -251,13 +297,16 @@ impl PPU {
   }
 
   fn write_oam_data(&mut self, data: u8) {
-    self.oam[self.registers.oam_address as usize] = data;
+    self.oam[self.registers.oam_address as usize] = match self.registers.oam_address % 0x04 {
+      0x02 => data & 0xE3, // Byte 2, unimplemented bits
+      _ => data,
+    };
     self.registers.increment_oam_addr();
   }
 
   fn read_status(&mut self) -> u8 {
     let res = self.registers.status.get();
-
+    self.nmi(false);
     self.registers.status.unset_flag(StatusFlag::VBLankStarted);
     self.registers.reset_latch();
 
@@ -466,5 +515,13 @@ impl PPU {
 
       (acc << 4) | (a | p1 | p2)
     })
+  }
+
+  fn nmi(&mut self, occurred: bool) {
+    self.nmi.change(occurred, self.registers.controller.get_flag(ControllerFlag::NMIGen));
+  }
+
+  pub fn poll(&mut self) -> bool {
+    self.nmi.poll()
   }
 }

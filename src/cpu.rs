@@ -10,7 +10,7 @@ use register::{Flag, Register, Registers};
 pub struct CPU {
   registers: Registers,
   system: System,
-  branched: bool,
+  branched: u8,
 }
 
 impl CPU {
@@ -20,7 +20,7 @@ impl CPU {
     CPU {
       registers: Registers::new(),
       system,
-      branched: false,
+      branched: 0,
     }
   }
 
@@ -36,7 +36,9 @@ impl CPU {
 
   fn run(&mut self) {
     loop {
-      if self.system.poll_nmi() {
+      if self.system.poll_irq() {
+        self.interrupt(Interrupt::IRQ);
+      } else if self.system.poll_nmi() {
         self.interrupt(Interrupt::NMI);
       }
 
@@ -51,7 +53,7 @@ impl CPU {
   }
 
   fn interrupt(&mut self, interrupt: Interrupt) {
-    if self.registers.get_flag(Flag::InterruptDisable) && (interrupt == Interrupt::BRK) {
+    if self.registers.get_flag(Flag::InterruptDisable) && (interrupt == Interrupt::IRQ) {
       return;
     }
 
@@ -129,12 +131,9 @@ impl CPU {
   }
 
   fn branched(&mut self) -> u8 {
-    if self.branched {
-      self.branched = false;
-      1
-    } else {
-      0
-    }
+    let res = self.branched;
+    self.branched = 0;
+    res
   }
 
   fn update_zero_negative(&mut self, res: u8) {
@@ -199,9 +198,8 @@ impl CPU {
         let delta = self.read() as i8;
         let base_addr = self.registers.get_pc();
         let addr = base_addr.wrapping_add(delta as u16);
-        let extra = (addr & 0xFF00) != (base_addr & 0xFF00);
 
-        OperandAddress(addr, mode, extra)
+        OperandAddress(addr, mode, false)
       }
       Addressing::ZeroPage => OperandAddress(self.read() as u16, mode, false),
       Addressing::ZeroPageX => OperandAddress(
@@ -278,7 +276,6 @@ impl CPU {
       OpCode::LDX   =>  self.ldx(operand),
       OpCode::LDY   =>  self.ldy(operand),
       OpCode::LSR   =>  self.lsr(operand),
-      OpCode::XLXA  =>  self.lxa(operand),
       OpCode::NOP   =>  self.nop(),
       OpCode::XNOP  =>  self.nop(),
       OpCode::ORA   =>  self.ora(operand),
@@ -338,7 +335,7 @@ impl CPU {
 
   fn alr(&mut self, operand: Operand) {
     self.and(operand);
-    self.lsr(operand);
+    self.lsr(Operand(OperandAddress(0x0, Addressing::Accumulator, false), self.registers.get(Register::A)));
   }
 
   fn anc(&mut self, operand: Operand) {
@@ -363,12 +360,12 @@ impl CPU {
 
   fn arr(&mut self, operand: Operand) {
     self.and(operand);
-    self.ror(operand);
+    self.ror(Operand(OperandAddress(0x0, Addressing::Accumulator, false), self.registers.get(Register::A)));
 
     let b5 = self.registers.get(Register::A) & 0x20 == 0x20;
     let b6 = self.registers.get(Register::A) & 0x40 == 0x40;
 
-    self.registers.change_flag(Flag::Carry, b5);
+    self.registers.change_flag(Flag::Carry, b6);
     self.registers.change_flag(Flag::Overflow, b5 ^ b6);
   }
 
@@ -388,22 +385,22 @@ impl CPU {
 
   fn bcc(&mut self, Operand(OperandAddress(addr, _, _), _): Operand) {
     if !self.registers.get_flag(Flag::Carry) {
+      self.branched = 1 + ((self.registers.get_pc() & 0xFF00) != (addr & 0xFF00)) as u8;
       self.registers.set_pc(addr);
-      self.branched = true;
     }
   }
 
   fn bcs(&mut self, Operand(OperandAddress(addr, _, _), _): Operand) {
     if self.registers.get_flag(Flag::Carry) {
+      self.branched = 1 + ((self.registers.get_pc() & 0xFF00) != (addr & 0xFF00)) as u8;
       self.registers.set_pc(addr);
-      self.branched = true;
     }
   }
 
   fn beq(&mut self, Operand(OperandAddress(addr, _, _), _): Operand) {
     if self.registers.get_flag(Flag::Zero) {
+      self.branched = 1 + ((self.registers.get_pc() & 0xFF00) != (addr & 0xFF00)) as u8;
       self.registers.set_pc(addr);
-      self.branched = true;
     }
   }
 
@@ -421,22 +418,22 @@ impl CPU {
 
   fn bmi(&mut self, Operand(OperandAddress(addr, _, _), _): Operand) {
     if self.registers.get_flag(Flag::Negative) {
+      self.branched = 1 + ((self.registers.get_pc() & 0xFF00) != (addr & 0xFF00)) as u8;
       self.registers.set_pc(addr);
-      self.branched = true;
     }
   }
 
   fn bne(&mut self, Operand(OperandAddress(addr, _, _), _): Operand) {
     if !self.registers.get_flag(Flag::Zero) {
+      self.branched = 1 + ((self.registers.get_pc() & 0xFF00) != (addr & 0xFF00)) as u8;
       self.registers.set_pc(addr);
-      self.branched = true;
     }
   }
 
   fn bpl(&mut self, Operand(OperandAddress(addr, _, _), _): Operand) {
     if !self.registers.get_flag(Flag::Negative) {
+      self.branched = 1 + ((self.registers.get_pc() & 0xFF00) != (addr & 0xFF00)) as u8;
       self.registers.set_pc(addr);
-      self.branched = true;
     }
   }
 
@@ -447,15 +444,15 @@ impl CPU {
 
   fn bvc(&mut self, Operand(OperandAddress(addr, _, _), _): Operand) {
     if !self.registers.get_flag(Flag::Overflow) {
+      self.branched = 1 + ((self.registers.get_pc() & 0xFF00) != (addr & 0xFF00)) as u8;
       self.registers.set_pc(addr);
-      self.branched = true;
     }
   }
 
   fn bvs(&mut self, Operand(OperandAddress(addr, _, _), _): Operand) {
     if self.registers.get_flag(Flag::Overflow) {
+      self.branched = 1 + ((self.registers.get_pc() & 0xFF00) != (addr & 0xFF00)) as u8;
       self.registers.set_pc(addr);
-      self.branched = true;
     }
   }
 
@@ -495,7 +492,8 @@ impl CPU {
 
   fn dcp(&mut self, operand: Operand) {
     self.dec(operand);
-    self.cmp(operand);
+    let val = self.system.read(operand.0.0);
+    self.cmp(Operand(operand.0, val));
   }
 
   fn dec(&mut self, Operand(OperandAddress(addr, _, _), data): Operand) {
@@ -545,7 +543,8 @@ impl CPU {
 
   fn isc(&mut self, operand: Operand) {
     self.inc(operand);
-    self.sbc(operand);
+    let val = self.system.read(operand.0.0);
+    self.sbc(Operand(operand.0, val));
   }
 
   fn jmp(&mut self, Operand(OperandAddress(addr, _, _), _): Operand) {
@@ -601,14 +600,6 @@ impl CPU {
     }
   }
 
-  fn lxa(&mut self, Operand(_, data): Operand) {
-    let res = self.registers.get(Register::A) & data;
-
-    self.registers.set(Register::A, res);
-    self.registers.set(Register::X, res);
-    self.update_zero_negative(res);
-  }
-
   fn nop(&mut self) {}
 
   fn ora(&mut self, Operand(_, data): Operand) {
@@ -640,7 +631,8 @@ impl CPU {
 
   fn rla(&mut self, operand: Operand) {
     self.rol(operand);
-    self.and(operand);
+    let val = self.system.read(operand.0.0);
+    self.and(Operand(operand.0, val));
   }
 
   fn rol(&mut self, Operand(OperandAddress(addr, mode, _), data): Operand) {
@@ -679,7 +671,8 @@ impl CPU {
 
   fn rra(&mut self, operand: Operand) {
     self.ror(operand);
-    self.adc(operand);
+    let val = self.system.read(operand.0.0);
+    self.adc(Operand(operand.0, val));
   }
 
   fn rti(&mut self) {
@@ -728,7 +721,7 @@ impl CPU {
 
     let res = data_b.wrapping_sub(data_a);
 
-    self.registers.change_flag(Flag::Carry, data_b <= data_a);
+    self.registers.change_flag(Flag::Carry, data_a <= data_b);
     self.update_zero_negative(res);
     self.registers.set(Register::X, res);
   }
@@ -755,27 +748,31 @@ impl CPU {
   }
 
   fn shx(&mut self, Operand(OperandAddress(addr, _, _), _): Operand) {
+    let val = self.registers.get(Register::X) & ((addr >> 8) as u8).wrapping_add(1);
     self.system.write(
-      addr,
-      self.registers.get(Register::X) & ((addr >> 8) as u8).wrapping_add(1),
+      (addr & 0xFF) | ((val as u16) << 8),
+      val,
     );
   }
 
   fn shy(&mut self, Operand(OperandAddress(addr, _, _), _): Operand) {
+    let val = self.registers.get(Register::Y) & ((addr >> 8) as u8).wrapping_add(1);
     self.system.write(
-      addr,
-      self.registers.get(Register::Y) & ((addr >> 8) as u8).wrapping_add(1),
+      (addr & 0xFF) | ((val as u16) << 8),
+      val,
     );
   }
 
   fn slo(&mut self, operand: Operand) {
     self.asl(operand);
-    self.ora(operand);
+    let val = self.system.read(operand.0.0);
+    self.ora(Operand(OperandAddress(0x0, Addressing::Implied, false), val));
   }
 
   fn sre(&mut self, operand: Operand) {
     self.lsr(operand);
-    self.eor(operand);
+    let val = self.system.read(operand.0.0);
+    self.eor(Operand(operand.0, val));
   }
 
   fn sta(&mut self, Operand(OperandAddress(addr, _, _), _): Operand) {

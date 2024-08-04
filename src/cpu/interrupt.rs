@@ -9,12 +9,18 @@ impl Interrupt {
   pub const NMI: Interrupt = Interrupt {
     read_address: 0xFFFA,
     mask: 0b00100000,
-    cycles: 2,
+    cycles: 7,
   };
 
   pub const BRK: Interrupt = Interrupt {
     read_address: 0xFFFE,
     mask: 0b00110000,
     cycles: 1,
+  };
+
+  pub const IRQ: Interrupt = Interrupt {
+    read_address: 0xFFFE,
+    mask: 0b00100000,
+    cycles: 7,
   };
 }

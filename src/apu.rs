@@ -111,6 +111,14 @@ impl APU {
     }
   }
 
+  pub fn tick(&mut self) {
+
+  }
+
+  pub fn poll(&mut self) -> bool {
+    self.irq.pending || self.dmc.irq.pending
+  }
+
   fn read_status(&mut self) -> u8 {
     let mut status = 0x0;
 

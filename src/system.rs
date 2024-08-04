@@ -92,15 +92,18 @@ impl System {
   }
 
   pub fn tick(&mut self, cycles: u16) {
-    self.cycles += cycles as usize;
+    self.cycles = self.cycles.wrapping_add(cycles as usize);
 
     let mut render = false;
     for _ in 0 .. 3 * cycles {
-      let nmi_status = self.ppu.nmi_interrupt;
-      self.ppu.tick();
-      if !nmi_status && self.ppu.nmi_interrupt {
+
+      if self.ppu.tick() {
         render = true
       }
+    }
+
+    for _ in 0 .. cycles {
+      self.apu.tick();
     }
 
     if render {
@@ -118,8 +121,10 @@ impl System {
   }
 
   pub fn poll_nmi(&mut self) -> bool {
-    let res = self.ppu.nmi_interrupt;
-    self.ppu.nmi_interrupt = false;
-    res
+    self.ppu.poll()
+  }
+
+  pub fn poll_irq(&mut self) -> bool {
+    self.apu.poll()
   }
 }
