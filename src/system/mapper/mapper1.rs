@@ -9,7 +9,8 @@ pub struct Mapper1 {
   banks: u8,
 
   mirroring: Mirroring,
-  chr: Vec<u8>,
+  chr_rom: Vec<u8>,
+  chr_ram: Vec<u8>,
   prg_rom: Vec<u8>,
   prg_ram: [u8; 0x2000],
   ranges: HashSet<RangeInclusive<u16>>,
@@ -56,11 +57,14 @@ impl Mapper for Mapper1 {
 }
 
 impl Mapper1 {
-  pub fn new(chr: Vec<u8>, prg_rom: Vec<u8>, mirroring: Mirroring) -> Self {
+  pub fn new(chr_rom: Vec<u8>, prg_rom: Vec<u8>, mirroring: Mirroring) -> Self {
+    let chr = !chr_rom.is_empty();
+
     Mapper1 {
       banks: (prg_rom.len() / PRG_BANK_SIZE) as u8,
       mirroring,
-      chr,
+      chr_rom,
+      chr_ram: if chr { vec![] } else { vec![0; 0x2000] },
       prg_rom,
       prg_ram: [0; 0x2000],
       ranges: HashSet::new(),
@@ -87,7 +91,9 @@ impl Mapper1 {
       false => self.chr0,
     } as usize;
     let index = (bank * CHR_BANK_SIZE) + (addr as usize % CHR_BANK_SIZE);
-    self.chr[index]
+
+    let chr = if !self.chr_rom.is_empty() { &self.chr_rom } else { &self.chr_ram };
+    chr[index]
   }
 
   fn chr1_read(&self, addr: u16) -> u8 {
@@ -96,25 +102,35 @@ impl Mapper1 {
       false => self.chr1,
     } as usize;
     let index = (bank * CHR_BANK_SIZE) + (addr as usize % CHR_BANK_SIZE);
-    self.chr[index]
+
+    let chr = if !self.chr_rom.is_empty() { &self.chr_rom } else { &self.chr_ram };
+    chr[index]
   }
 
   fn chr0_write(&mut self, addr: u16, val: u8) {
+    if self.chr_ram.is_empty() {
+      return;
+    }
+
     let bank = match self.chr_mode() == 0 {
       true => self.chr0 & 0x1E,
       false => self.chr0,
     } as usize;
     let index = (bank * CHR_BANK_SIZE) + (addr as usize % CHR_BANK_SIZE);
-    self.chr[index] = val;
+    self.chr_ram[index] = val;
   }
 
   fn chr1_write(&mut self, addr: u16, val: u8) {
+    if self.chr_ram.is_empty() {
+      return;
+    }
+
     let bank = match self.chr_mode() == 0 {
       true => (self.chr0 & 0x1E) + 1,
       false => self.chr1,
     } as usize;
     let index = (bank * CHR_BANK_SIZE) + (addr as usize % CHR_BANK_SIZE);
-    self.chr[index] = val;
+    self.chr_ram[index] = val;
   }
 
   fn prg_ram_read(&self, addr: u16) -> u8 {

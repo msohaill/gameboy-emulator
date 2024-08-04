@@ -6,7 +6,8 @@ const PRG_BANK_SIZE: usize = 16384;
 
 pub struct Mapper2 {
   mirroring: Mirroring,
-  chr: Vec<u8>,
+  chr_rom: Vec<u8>,
+  chr_ram: Vec<u8>,
   prg_rom: Vec<u8>,
   prg_ram: [u8; 0x2000],
   ranges: HashSet<RangeInclusive<u16>>,
@@ -45,12 +46,14 @@ impl Mapper for Mapper2 {
 }
 
 impl Mapper2 {
-  pub fn new(chr: Vec<u8>, prg_rom: Vec<u8>, mirroring: Mirroring) -> Self {
+  pub fn new(chr_rom: Vec<u8>, prg_rom: Vec<u8>, mirroring: Mirroring) -> Self {
     let last = (prg_rom.len() / PRG_BANK_SIZE) - 1;
+    let chr = !chr_rom.is_empty();
 
     Mapper2 {
       mirroring,
-      chr,
+      chr_rom,
+      chr_ram: if chr { vec![] } else { vec![0; 0x2000] },
       prg_rom,
       prg_ram: [0; 0x2000],
       ranges: HashSet::new(),
@@ -60,13 +63,19 @@ impl Mapper2 {
   }
 
   fn chr_read(&self, addr: u16) -> u8 {
-    let index = addr as usize % self.chr.len();
-    self.chr[index]
+    if self.chr_rom.is_empty() {
+      self.chr_ram[addr as usize % self.chr_ram.len()]
+    } else {
+      self.chr_rom[addr as usize % self.chr_rom.len()]
+
+    }
   }
 
   fn chr_write(&mut self, addr: u16, val: u8) {
-    let index = addr as usize % self.chr.len();
-    self.chr[index] = val;
+    if !self.chr_ram.is_empty() {
+      let index = addr as usize % self.chr_ram.len();
+      self.chr_ram[index] = val;
+    }
   }
 
   fn prg_ram_read(&self, addr: u16) -> u8 {

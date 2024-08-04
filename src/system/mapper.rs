@@ -14,11 +14,11 @@ pub enum Mirroring {
   Vertical, Horizontal, FourScreen, Single0, Single1,
 }
 
-pub fn from(mapper: u8, chr: Vec<u8>, prg_rom: Vec<u8>, mirroring: Mirroring) -> Box<dyn Mapper> {
+pub fn from(mapper: u8, chr_rom: Vec<u8>, prg_rom: Vec<u8>, mirroring: Mirroring) -> Box<dyn Mapper> {
   match mapper {
-    0 => Box::from(Mapper0::new(chr, prg_rom, mirroring)),
-    1 => Box::from(Mapper1::new(chr, prg_rom, mirroring)),
-    2 => Box::from(Mapper2::new(chr, prg_rom, mirroring)),
+    0 => Box::from(Mapper0::new(chr_rom, prg_rom, mirroring)),
+    1 => Box::from(Mapper1::new(chr_rom, prg_rom, mirroring)),
+    2 => Box::from(Mapper2::new(chr_rom, prg_rom, mirroring)),
     _ => panic!("Unsupported mapper: {}", mapper),
   }
 }

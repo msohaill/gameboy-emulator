@@ -31,7 +31,7 @@ impl Cartridge {
     Ok(Cartridge {
       mapper: from(
         (flags_7 & 0xF0) | (flags_6 >> 4),
-        if chr_bytes == 0 { vec![0; 0x2000] } else { raw[chr_start..(chr_start + chr_bytes)].to_vec() },
+        raw[chr_start..(chr_start + chr_bytes)].to_vec(),
         raw[prg_start..(prg_start + prg_bytes)].to_vec(),
         match (flags_6 & 0x08 == 0x08, flags_6 & 0x01 == 0x01) {
           (true, _) => Mirroring::FourScreen,
