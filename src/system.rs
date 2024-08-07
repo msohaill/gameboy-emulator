@@ -34,11 +34,14 @@ impl System {
   pub const JOYPAD2: u16 = 0x4017;
 
   pub fn new(cartridge: Cartridge) -> Self {
+    let mut apu = APU::new();
+    let audio_callback = apu.mixer.callback();
+
     System {
-      apu: APU::new(),
+      apu,
       ppu: PPU::new(cartridge.mapper),
       joypads: (Joypad::new(), Joypad::new()),
-      renderer: Renderer::new(),
+      renderer: Renderer::new(audio_callback),
       cycles: 0,
       memory: Memory::new(),
     }
@@ -104,9 +107,14 @@ impl System {
 
     for _ in 0 .. cycles {
       self.apu.tick();
+
+      if self.apu.dma() {
+        self.dmcdma();
+      }
     }
 
     if render {
+      self.apu.mix();
       Renderer::update_canvas(self);
     }
   }
@@ -118,6 +126,12 @@ impl System {
       self.ppu.write(0x2004, val);
     }
     self.tick(if self.cycles % 2 == 0 { 513 } else { 514 })
+  }
+
+  fn dmcdma(&mut self) {
+    let addr = self.apu.dma_addr();
+    let val = self.read(addr);
+    self.apu.dmcdma(val);
   }
 
   pub fn poll_nmi(&mut self) -> bool {

@@ -28,4 +28,22 @@ impl Envelope {
   pub fn reset(&mut self) {
     self.reset = true;
   }
+
+  pub fn tick(&mut self) {
+    if self.reset {
+      self.reset = false;
+      self.volume = 15;
+      self.counter = self.rate;
+    } else if self.counter > 0 {
+      self.counter -= 1;
+    } else {
+      self.counter = self.rate;
+
+      if self.volume > 0 {
+        self.volume -= 1;
+      } else if self.looped {
+        self.volume = 15;
+      }
+    }
+  }
 }

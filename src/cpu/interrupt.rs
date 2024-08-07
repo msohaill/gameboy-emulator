@@ -15,7 +15,7 @@ impl Interrupt {
   pub const BRK: Interrupt = Interrupt {
     read_address: 0xFFFE,
     mask: 0b00110000,
-    cycles: 1,
+    cycles: 0,
   };
 
   pub const IRQ: Interrupt = Interrupt {

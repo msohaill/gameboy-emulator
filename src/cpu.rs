@@ -14,6 +14,7 @@ pub struct CPU {
 }
 
 impl CPU {
+  pub const CLOCK_RATE: f32 = 21477272.0 / 12.0;
   const STACK_START: u16 = 0x0100;
 
   pub fn new(system: System) -> Self {
@@ -45,7 +46,7 @@ impl CPU {
       let instruction = Instruction::get(self.read());
       let operand = self.get_operand(instruction.mode, instruction.needs_data());
 
-      self.execute_instr(instruction.opcode, operand);
+      self.execute(instruction.opcode, operand);
 
       let cycles = instruction.cycles + instruction.extra * (operand.0.2 as u8) + self.branched();
       self.system.tick(cycles as u16);
@@ -232,7 +233,7 @@ impl CPU {
     }
   }
 
-  fn execute_instr(&mut self, opcode: OpCode, operand: Operand) {
+  fn execute(&mut self, opcode: OpCode, operand: Operand) {
     match opcode {
       OpCode::ADC   =>  self.adc(operand),
       OpCode::XALR  =>  self.alr(operand),

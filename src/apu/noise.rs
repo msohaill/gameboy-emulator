@@ -1,11 +1,11 @@
-use super::{envelope::Envelope, lengthcounter::LengthCounter};
+use super::{envelope::Envelope, lengthcounter::LengthCounter, timer::Timer};
 
 pub struct Noise {
   enabled: bool,
   envelope: Envelope,
   length: LengthCounter,
   shift: Shift,
-  timer: u16,
+  timer: Timer,
 }
 
 struct Shift {
@@ -22,7 +22,14 @@ impl Shift {
   fn new() -> Self {
     Shift {
       mode: ShiftMode::One,
-      value: 0,
+      value: 0x1,
+    }
+  }
+
+  fn amount(&self) -> u8 {
+    match self.mode {
+      ShiftMode::One => 1,
+      ShiftMode::Six => 6,
     }
   }
 }
@@ -38,7 +45,7 @@ impl Noise {
       envelope: Envelope::new(),
       length: LengthCounter::new(),
       shift: Shift::new(),
-      timer: 0x0,
+      timer: Timer::new(),
     }
   }
 
@@ -60,7 +67,7 @@ impl Noise {
   }
 
   pub fn write_timer(&mut self, val: u8) {
-    self.timer = Noise::FREQ_TABLE[(val & 0xF) as usize];
+    self.timer.period = Noise::FREQ_TABLE[(val & 0xF) as usize];
     self.shift.mode = if val & 0x80 == 0x0 {
       ShiftMode::One
     } else {
@@ -74,5 +81,33 @@ impl Noise {
       self.length.update(val >> 3);
     }
 
+  }
+
+  pub fn timer(&mut self) {
+    if self.timer.tick() {
+      let feedback = (self.shift.value & 0x01) ^ ((self.shift.value >> self.shift.amount()) & 0x01);
+      self.shift.value = (self.shift.value & 0x7FFF) | (feedback << 14);
+      self.shift.value >>= 1;
+    }
+  }
+
+  pub fn quarter(&mut self) {
+    self.envelope.tick();
+  }
+
+  pub fn half(&mut self) {
+    self.length.tick();
+  }
+
+  pub fn signal(&self) -> f32 {
+    if self.enabled && self.shift.value & 0x01 == 0x0 && self.length.counter != 0 {
+      if self.envelope.enabled {
+        self.envelope.volume as f32
+      } else {
+        self.envelope.rate as f32
+      }
+    } else {
+      0.0
+    }
   }
 }

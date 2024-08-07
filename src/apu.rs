@@ -1,14 +1,20 @@
 mod dmc;
 mod envelope;
+mod filter;
 mod lengthcounter;
+pub mod mixer;
 mod noise;
 mod pulse;
+mod timer;
 mod triangle;
 
 use dmc::DMC;
+use mixer::Mixer;
 use noise::Noise;
-use pulse::Pulse;
+use pulse::{Pulse, PulseChannel};
 use triangle::Triangle;
+
+use crate::cpu::CPU;
 
 pub struct APU {
   pulse_one: Pulse,
@@ -18,7 +24,12 @@ pub struct APU {
   dmc: DMC,
 
   mode: SequencerMode,
+  step: u8,
   irq: IRQ,
+  cycles: usize,
+
+  samples: Vec<f32>,
+  pub mixer: Mixer,
 }
 
 #[derive(PartialEq, Eq)]
@@ -30,6 +41,15 @@ enum SequencerMode {
 pub struct IRQ {
   enabled: bool,
   pending: bool,
+}
+
+impl SequencerMode {
+  fn steps(&self) -> u8 {
+    match *self {
+      SequencerMode::StepFour => 4,
+      SequencerMode::StepFive => 5,
+    }
+  }
 }
 
 impl IRQ {
@@ -50,16 +70,23 @@ impl IRQ {
 }
 
 impl APU {
+  const SEQUENCER_RATE: f32 = CPU::CLOCK_RATE / 240.0;
+
   pub fn new() -> Self {
     APU {
-      pulse_one: Pulse::new(),
-      pulse_two: Pulse::new(),
+      pulse_one: Pulse::new(PulseChannel::One),
+      pulse_two: Pulse::new(PulseChannel::Two),
       triangle: Triangle::new(),
       noise: Noise::new(),
       dmc: DMC::new(),
 
       mode: SequencerMode::StepFour,
+      step: 0x0,
       irq: IRQ::new(),
+      cycles: 0,
+
+      samples: vec![],
+      mixer: Mixer::new(),
     }
   }
 
@@ -112,11 +139,94 @@ impl APU {
   }
 
   pub fn tick(&mut self) {
+    let prev = self.cycles as f32;
+    self.cycles = self.cycles.wrapping_add(1);
+    let post = self.cycles as f32;
 
+    self.dmc.tick_dma();
+    self.timers();
+
+    if (prev / APU::SEQUENCER_RATE) as u32 != (post / APU::SEQUENCER_RATE) as u32 {
+      self.frame();
+    }
+
+    self.signal();
   }
 
   pub fn poll(&mut self) -> bool {
     self.irq.pending || self.dmc.irq.pending
+  }
+
+  pub fn dma(&mut self) -> bool {
+    self.dmc.dma()
+  }
+
+  pub fn dma_addr(&self) -> u16 {
+    self.dmc.dma_addr()
+  }
+
+  pub fn dmcdma(&mut self, val: u8) {
+    self.dmc.load(val);
+  }
+
+  fn timers(&mut self) {
+    self.triangle.timer();
+
+    if self.cycles % 2 == 0 {
+      self.pulse_one.timer();
+      self.pulse_two.timer();
+      self.noise.timer();
+      self.dmc.timer();
+    }
+  }
+
+  fn quarter(&mut self) {
+    self.pulse_one.quarter();
+    self.pulse_two.quarter();
+    self.triangle.quarter();
+    self.noise.quarter();
+  }
+
+  fn half(&mut self) {
+    self.pulse_one.half();
+    self.pulse_two.half();
+    self.triangle.half();
+    self.noise.half();
+  }
+
+  fn frame(&mut self) {
+    self.step = (self.step + 1) % self.mode.steps();
+
+    match self.step {
+      0 | 2 => self.quarter(),
+      1 | 3 => {
+        self.quarter();
+        self.half();
+      }
+      _ => { }
+    }
+
+    if self.step == 3 && self.mode == SequencerMode::StepFour && self.irq.enabled {
+      self.irq.pending = true;
+    }
+  }
+
+  fn signal(&mut self) {
+    let p1 = self.pulse_one.signal();
+    let p2 = self.pulse_two.signal();
+    let t = self.triangle.signal();
+    let n = self.noise.signal();
+    let d = self.dmc.signal();
+
+    let pulse = (95.88) / ((8128.0 / (p1 + p2)) + 100.0);
+    let tnd = (159.79) / ((1.0 / ((t / 8227.0) + (n / 12241.0) + (d / 22638.0))) + 100.0);
+
+    self.samples.push(pulse + tnd);
+  }
+
+  pub fn mix(&mut self) {
+    self.mixer.consume(&self.samples);
+    self.samples.clear();
   }
 
   fn read_status(&mut self) -> u8 {
@@ -157,10 +267,10 @@ impl APU {
 
   fn write_status(&mut self, val: u8) {
     self.pulse_one.set_enabled(val & 0x01 != 0x0);
-    self.pulse_one.set_enabled(val & 0x02 != 0x0);
+    self.pulse_two.set_enabled(val & 0x02 != 0x0);
     self.triangle.set_enabled(val & 0x04 != 0x0);
     self.noise.set_enabled(val & 0x08 != 0x0);
-    self.dmc.set_enabled(val & 0x10 != 0x0);
+    self.dmc.set_enabled(val & 0x10 != 0x0, self.cycles);
   }
 
   fn write_frame_counter(&mut self, val: u8) {
@@ -173,7 +283,8 @@ impl APU {
     self.irq.set_enabled((val & 0x40) == 0x0);
 
     if self.mode == SequencerMode::StepFive {
-      // step ...
+      self.quarter();
+      self.half();
     }
   }
 }
