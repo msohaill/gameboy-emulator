@@ -44,7 +44,7 @@ impl Renderer {
     let texture_creator = canvas.texture_creator();
 
     let audio = sdl_context.audio().unwrap().open_playback(None, &AudioSpecDesired {
-      freq: Some((Mixer::OUTPUT_FREQ * 0.8) as i32),
+      freq: Some(Mixer::OUTPUT_FREQ as i32),
       channels: Some(1),
       samples: Some(Mixer::BUFFER_SIZE as u16 / 2),
     }, |_| audio_callback).unwrap();

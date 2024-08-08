@@ -17,7 +17,7 @@ impl Cartridge {
     if header[0..4] != Cartridge::NES_TAG {
       return Err("File not in iNES format.");
     } else if flags_7 & 0x0C == 0x08 {
-      return Err("NES 2.0 format not supported (yet).");
+      println!("NES 2.0 format not supported (yet).");
     }
 
     let header_bytes = 16;

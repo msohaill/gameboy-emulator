@@ -2,7 +2,6 @@ use super::{timer::Timer, IRQ};
 
 pub struct DMC {
   pub irq: IRQ,
-  enabled: bool,
   looped: bool,
   timer: Timer,
   sample: Sample,
@@ -82,7 +81,6 @@ impl DMC {
   pub fn new() -> Self {
     DMC {
       irq: IRQ::new(),
-      enabled: false,
       looped: false,
       timer: Timer::new(),
       sample: Sample::new(),
@@ -98,7 +96,6 @@ impl DMC {
 
   pub fn set_enabled(&mut self, enabled: bool, cycle: usize) {
     self.irq.pending = false;
-    self.enabled = enabled;
 
     if enabled {
       if self.sample.length == 0 {
@@ -203,10 +200,6 @@ impl DMC {
   }
 
   pub fn signal(&self) -> f32 {
-    if self.enabled {
-      self.buffer.value as f32
-    } else {
-      0.0
-    }
+    self.buffer.value as f32
   }
 }
