@@ -1,5 +1,3 @@
-use std::{collections::HashSet, ops::RangeInclusive};
-
 use super::{Mirroring, Mapper};
 
 
@@ -9,16 +7,11 @@ pub struct Mapper0 {
   chr_ram: Vec<u8>,
   prg_rom: Vec<u8>,
   prg_ram: [u8; 0x2000],
-  ranges: HashSet<RangeInclusive<u16>>,
 }
 
 impl Mapper for Mapper0 {
   fn mirroring(&self) -> Mirroring {
     self.mirroring
-  }
-
-  fn ranges(&self) -> &HashSet<RangeInclusive<u16>> {
-    &self.ranges
   }
 
   fn read(&self, addr: u16) -> u8 {
@@ -49,7 +42,6 @@ impl Mapper0 {
       chr_ram: if chr { vec![] } else { vec![0; 0x2000] },
       prg_rom,
       prg_ram: [0; 0x2000],
-      ranges: HashSet::new(),
     }
   }
 

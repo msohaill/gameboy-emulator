@@ -1,5 +1,3 @@
-use std::{collections::HashSet, ops::RangeInclusive};
-
 use super::{Mirroring, Mapper};
 
 const PRG_BANK_SIZE: usize = 0x4000;
@@ -13,7 +11,6 @@ pub struct Mapper1 {
   chr_ram: Vec<u8>,
   prg_rom: Vec<u8>,
   prg_ram: [u8; 0x2000],
-  ranges: HashSet<RangeInclusive<u16>>,
 
   // Registers
   control: u8,
@@ -28,10 +25,6 @@ pub struct Mapper1 {
 impl Mapper for Mapper1 {
   fn mirroring(&self) -> Mirroring {
     self.mirroring
-  }
-
-  fn ranges(&self) -> &HashSet<RangeInclusive<u16>> {
-    &self.ranges
   }
 
   fn read(&self, addr: u16) -> u8 {
@@ -67,7 +60,6 @@ impl Mapper1 {
       chr_ram: if chr { vec![] } else { vec![0; 0x2000] },
       prg_rom,
       prg_ram: [0; 0x2000],
-      ranges: HashSet::new(),
       control: 0b11 << 2,
       chr0: 0,
       chr1: 0,
@@ -140,7 +132,7 @@ impl Mapper1 {
 
   fn prg_ram_write(&mut self, addr: u16, val: u8) {
     let index = addr as usize - 0x6000;
-    self.prg_ram[index] = val
+    self.prg_ram[index] = val;
   }
 
   fn read_first(&self, addr: u16) -> u8 {

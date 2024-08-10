@@ -139,6 +139,6 @@ impl System {
   }
 
   pub fn poll_irq(&mut self) -> bool {
-    self.apu.poll()
+    self.apu.poll() || self.ppu.mapper.poll()
   }
 }

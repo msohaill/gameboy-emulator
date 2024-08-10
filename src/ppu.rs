@@ -4,7 +4,7 @@ pub mod palette;
 pub mod register;
 pub mod state;
 
-use crate::system::mapper::Mapper;
+use crate::system::mapper::{Mapper, MapperEvent};
 use crate::system::System;
 
 use frame::Frame;
@@ -113,7 +113,10 @@ impl PPU {
       0x2003 => self.registers.write_oam_addr(data),
       0x2004 => self.write_oam_data(data),
       0x2005 => self.registers.write_scroll(data),
-      0x2006 => self.registers.write_address(data),
+      0x2006 => {
+        self.registers.write_address(data);
+        self.mapper.notify(MapperEvent::VRAMAddressChanged(self.registers.read_address()));
+      }
       0x2007 => self.write_data(data),
       0x2008..=System::PPU_END => self.write(addr & 0x2007, data),
       _ => panic!("Illegal PPU write access: {:#0X}", addr),
@@ -152,9 +155,9 @@ impl PPU {
     let visible   = self.scan.line < PPU::VISIBLE_SCANLINES - 1;
     let render    = prerender || visible;
 
-    let prefetch  = self.scan.dot >= 321 && self.scan.dot <= 336;
-    let render_cycle    = self.scan.dot > 0 && self.scan.dot <= Frame::WIDTH;
-    let fetch           = prefetch || render_cycle;
+    let prefetch      = self.scan.dot >= 321 && self.scan.dot <= 336;
+    let render_cycle  = self.scan.dot > 0 && self.scan.dot <= Frame::WIDTH;
+    let fetch         = prefetch || render_cycle;
 
     if self.rendering_enabled() {
       if visible && render_cycle {
@@ -208,6 +211,10 @@ impl PPU {
       return true;
     }
 
+    if (prerender || visible) && self.rendering_enabled() && self.scan.dot == 280 {
+      self.mapper.notify(MapperEvent::HBlank);
+    }
+
     if prerender && self.scan.dot == 1 {
       self.nmi(false);
       self.registers.status.unset_flag(StatusFlag::SpriteZeroHit);
@@ -223,6 +230,7 @@ impl PPU {
     self
       .registers
       .increment_address(self.registers.controller.vram_increment());
+    self.mapper.notify(MapperEvent::VRAMAddressChanged(self.registers.read_address()));
 
     match addr {
       0x0000..=0x1FFF => self.mapper_read(addr),
@@ -237,6 +245,7 @@ impl PPU {
     self
       .registers
       .increment_address(self.registers.controller.vram_increment());
+    self.mapper.notify(MapperEvent::VRAMAddressChanged(self.registers.read_address()));
 
     match addr {
       0x0000..=0x1FFF => self.mapper.write(addr, data),
