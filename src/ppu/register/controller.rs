@@ -14,6 +14,7 @@ impl Controller {
     self.get_flag(Flag::VRAMInc).then_some(0x20).unwrap_or(0x01)
   }
 
+  #[allow(unused)]
   pub fn name_table(&self) -> u16 {
     let offset = ((self.get_flag(Flag::NameHi) as u16) << 1) + self.get_flag(Flag::NameLo) as u16;
     0x2000 + 0x400 * offset

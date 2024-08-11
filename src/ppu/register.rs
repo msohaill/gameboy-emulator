@@ -1,6 +1,6 @@
-pub mod controller;
-pub mod mask;
-pub mod status;
+pub(in crate::ppu) mod controller;
+pub(in crate::ppu) mod mask;
+pub(in crate::ppu) mod status;
 
 use controller::{Controller, Flag as ControllerFlag};
 use mask::Mask;

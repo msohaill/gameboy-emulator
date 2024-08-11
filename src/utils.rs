@@ -14,14 +14,17 @@ macro_rules! bitflag {
         }
       }
 
+      #[allow(unused)]
       pub fn get(&self) -> u8 {
         self.value
       }
 
+      #[allow(unused)]
       pub fn set(&mut self, data: u8) {
         self.value = data;
       }
 
+      #[allow(unused)]
       pub fn get_flag(&self, flag: Flag) -> bool {
         match flag {
           Flag::$zero => self.value & 0b1 != 0,
@@ -35,6 +38,7 @@ macro_rules! bitflag {
           }
       }
 
+      #[allow(unused)]
       pub fn change_flag(&mut self, flag: Flag, val: bool) {
         match flag {
           Flag::$zero =>
@@ -56,19 +60,36 @@ macro_rules! bitflag {
         }
       }
 
+      #[allow(unused)]
       pub fn set_flag(&mut self, flag: Flag) {
         self.change_flag(flag, true);
       }
 
+      #[allow(unused)]
       pub fn unset_flag(&mut self, flag: Flag) {
         self.change_flag(flag, false);
       }
     }
 
     #[derive(Copy, Clone)]
+
     pub enum Flag {
-      $zero, $one, $two, $three,
-      $four, $five, $six, $seven,
+      #[allow(unused)]
+      $zero,
+      #[allow(unused)]
+      $one,
+      #[allow(unused)]
+      $two,
+      #[allow(unused)]
+      $three,
+      #[allow(unused)]
+      $four,
+      #[allow(unused)]
+      $five,
+      #[allow(unused)]
+      $six,
+      #[allow(unused)]
+      $seven,
     }
   };
 }

@@ -2,7 +2,6 @@
 pub struct State {
   pub buffer: u8,
   pub odd: bool,
-  pub sprites: usize,
   pub tile: u64,
 
   // Cached bytes
@@ -30,7 +29,6 @@ impl State {
     State {
       buffer: 0x0,
       odd: false,
-      sprites: 0,
       tile: 0x0,
       attrtable: 0x0,
       hitile: 0x0,

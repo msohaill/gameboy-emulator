@@ -1,16 +1,12 @@
-pub mod apu;
-pub mod cpu;
-pub mod joypad;
-pub mod neones;
-pub mod ppu;
-pub mod renderer;
-pub mod system;
-pub mod utils;
-
-use neones::NeoNES;
+use neones::neones::NeoNES;
+use neones::renderer::sdlrenderer::SDLRenderer;
 
 fn main() {
   let path = std::env::args().nth(1).unwrap_or(String::from("dev/Super_Mario.nes"));
-  let mut nes = NeoNES::new(path);
+  let rom = std::fs::read(path).unwrap();
+
+  let renderer = SDLRenderer::new();
+  let mut nes = NeoNES::new(rom, Box::new(renderer));
+
   nes.start();
 }

@@ -2,7 +2,7 @@ mod dmc;
 mod envelope;
 mod filter;
 mod lengthcounter;
-pub mod mixer;
+pub(crate) mod mixer;
 mod noise;
 mod pulse;
 mod timer;

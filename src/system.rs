@@ -1,19 +1,20 @@
-pub mod cartridge;
-pub mod mapper;
-pub mod memory;
+pub(crate) mod cartridge;
+pub mod joypad;
+pub(crate) mod mapper;
+mod memory;
 
 use crate::apu::APU;
-use crate::joypad::Joypad;
 use crate::ppu::PPU;
 use crate::renderer::Renderer;
 use cartridge::Cartridge;
+use joypad::Joypad;
 use memory::Memory;
 
-pub struct System {
+pub(crate) struct System {
   pub apu: APU,
   pub ppu: PPU,
   pub joypads: (Joypad, Joypad),
-  pub renderer: Renderer,
+  pub renderer: Box<dyn Renderer>,
   cycles: usize,
   memory: Memory,
 }
@@ -33,15 +34,15 @@ impl System {
   pub const JOYPAD1: u16 = 0x4016;
   pub const JOYPAD2: u16 = 0x4017;
 
-  pub fn new(cartridge: Cartridge) -> Self {
+  pub fn new(cartridge: Cartridge, mut renderer: Box<dyn Renderer>) -> Self {
     let mut apu = APU::new();
-    let audio_callback = apu.mixer.callback();
+    renderer.use_consumer(apu.mixer.consumer());
 
     System {
       apu,
       ppu: PPU::new(cartridge.mapper),
       joypads: (Joypad::new(), Joypad::new()),
-      renderer: Renderer::new(audio_callback),
+      renderer,
       cycles: 0,
       memory: Memory::new(),
     }
@@ -87,13 +88,6 @@ impl System {
     (hi << 8) | lo
   }
 
-  pub fn writeu16(&mut self, addr: u16, data: u16) {
-    let lo = (data & 0xFF) as u8;
-    let hi = (data >> 8) as u8;
-    self.write(addr, lo);
-    self.write(addr.wrapping_add(1), hi);
-  }
-
   pub fn tick(&mut self, cycles: u16) {
     self.cycles = self.cycles.wrapping_add(cycles as usize);
 
@@ -115,7 +109,7 @@ impl System {
 
     if render {
       self.apu.mix();
-      Renderer::update_canvas(self);
+      self.renderer.render(&self.ppu.frame.data, &mut self.joypads.0);
     }
   }
 

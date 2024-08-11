@@ -1,6 +1,6 @@
-pub mod instruction;
-pub mod interrupt;
-pub mod register;
+mod instruction;
+mod interrupt;
+mod register;
 
 use crate::system::System;
 use instruction::{Addressing, Instruction, OpCode, Operand, OperandAddress};

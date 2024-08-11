@@ -8,9 +8,8 @@ pub struct Cartridge {
 impl Cartridge {
   const NES_TAG: [u8; 4] = [0x4E, 0x45, 0x53, 0x1A];
 
-  pub fn new(path: String) -> Result<Cartridge, &'static str> {
-    let raw = &std::fs::read(path).unwrap();
-    let header = &raw[0..16];
+  pub fn new(rom: Vec<u8>) -> Result<Cartridge, &'static str> {
+    let header = &rom[0..16];
     let flags_6 = header[6];
     let flags_7 = header[7];
 
@@ -31,8 +30,8 @@ impl Cartridge {
     Ok(Cartridge {
       mapper: from(
         (flags_7 & 0xF0) | (flags_6 >> 4),
-        raw[chr_start..(chr_start + chr_bytes)].to_vec(),
-        raw[prg_start..(prg_start + prg_bytes)].to_vec(),
+        rom[chr_start..(chr_start + chr_bytes)].to_vec(),
+        rom[prg_start..(prg_start + prg_bytes)].to_vec(),
         match (flags_6 & 0x08 == 0x08, flags_6 & 0x01 == 0x01) {
           (true, _) => Mirroring::FourScreen,
           (false, true) => Mirroring::Vertical,

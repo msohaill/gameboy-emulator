@@ -1,8 +1,8 @@
-pub mod color;
-pub mod frame;
-pub mod palette;
-pub mod register;
-pub mod state;
+mod color;
+pub(crate) mod frame;
+mod palette;
+mod register;
+mod state;
 
 use crate::system::mapper::{Mapper, MapperEvent};
 use crate::system::System;

@@ -20,7 +20,7 @@ pub struct Registers {
 
 #[derive(Clone, Copy)]
 pub enum Register {
-  A, X, Y, P, PC, SP,
+  A, X, Y, P, #[allow(unused) ]PC, SP,
 }
 
 impl Registers {

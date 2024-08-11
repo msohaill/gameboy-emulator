@@ -1,6 +1,5 @@
 use crate::{
-  cpu::CPU,
-  system::{cartridge::Cartridge, System},
+  cpu::CPU, renderer::Renderer, system::{cartridge::Cartridge, System}
 };
 
 pub struct NeoNES {
@@ -8,9 +7,9 @@ pub struct NeoNES {
 }
 
 impl NeoNES {
-  pub fn new(path: String) -> Self {
+  pub fn new(rom: Vec<u8>, renderer: Box<dyn Renderer>) -> Self {
     NeoNES {
-      cpu: CPU::new(System::new(Cartridge::new(path).unwrap())),
+      cpu: CPU::new(System::new(Cartridge::new(rom).unwrap(), renderer)),
     }
   }
 
