@@ -150,7 +150,7 @@ impl Pulse {
         let delta = self.timer.period >> self.sweep.shift;
 
         if self.sweep.negated {
-          self.timer.period += delta + 1;
+          self.timer.period -= delta;
 
           match self.channel {
             PulseChannel::One => self.timer.period += 1,
