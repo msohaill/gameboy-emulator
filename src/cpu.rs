@@ -9,7 +9,7 @@ use register::{Flag, Register, Registers};
 
 pub struct CPU {
   registers: Registers,
-  system: System,
+  pub(crate) system: System,
   branched: u8,
 }
 
@@ -18,11 +18,13 @@ impl CPU {
   const STACK_START: u16 = 0x0100;
 
   pub fn new(system: System) -> Self {
-    CPU {
+    let mut cpu = CPU {
       registers: Registers::new(),
       system,
       branched: 0,
-    }
+    };
+    cpu.reset();
+    cpu
   }
 
   fn reset(&mut self) {
@@ -31,26 +33,30 @@ impl CPU {
   }
 
   pub fn start(&mut self) {
-    self.reset();
-    self.run();
+    loop { self.step(); }
   }
 
-  fn run(&mut self) {
-    loop {
-      if self.system.poll_irq() {
-        self.interrupt(Interrupt::IRQ);
-      } else if self.system.poll_nmi() {
-        self.interrupt(Interrupt::NMI);
-      }
-
-      let instruction = Instruction::get(self.read());
-      let operand = self.get_operand(instruction.mode, instruction.needs_data());
-
-      self.execute(instruction.opcode, operand);
-
-      let cycles = instruction.cycles + instruction.extra * (operand.0.2 as u8) + self.branched();
-      self.system.tick(cycles as u16);
+  pub fn step_frame(&mut self) {
+    let current = self.system.ppu.frame.number;
+    while current == self.system.ppu.frame.number {
+      self.step();
     }
+  }
+
+  fn step(&mut self) {
+    if self.system.poll_irq() {
+      self.interrupt(Interrupt::IRQ);
+    } else if self.system.poll_nmi() {
+      self.interrupt(Interrupt::NMI);
+    }
+
+    let instruction = Instruction::get(self.read());
+    let operand = self.get_operand(instruction.mode, instruction.needs_data());
+
+    self.execute(instruction.opcode, operand);
+
+    let cycles = instruction.cycles + instruction.extra * (operand.0.2 as u8) + self.branched();
+    self.system.tick(cycles as u16);
   }
 
   fn interrupt(&mut self, interrupt: Interrupt) {

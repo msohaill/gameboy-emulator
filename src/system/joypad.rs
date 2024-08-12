@@ -32,7 +32,7 @@ impl Joypad {
     let res = (self.buttons.get() & (1 << self.index)) >> self.index;
     self.index += !self.strobe as u8;
 
-    res
+    res | 0x40
   }
 
   pub fn write(&mut self, data: u8) {

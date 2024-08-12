@@ -3,6 +3,10 @@ pub mod joypad;
 pub(crate) mod mapper;
 mod memory;
 
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use crate::apu::mixer::NESAudioCallback;
 use crate::apu::APU;
 use crate::ppu::PPU;
 use crate::renderer::Renderer;
@@ -10,11 +14,11 @@ use cartridge::Cartridge;
 use joypad::Joypad;
 use memory::Memory;
 
-pub(crate) struct System {
+pub struct System {
   pub apu: APU,
   pub ppu: PPU,
   pub joypads: (Joypad, Joypad),
-  pub renderer: Box<dyn Renderer>,
+  pub renderer: Rc<RefCell<dyn Renderer>>,
   cycles: usize,
   memory: Memory,
 }
@@ -34,18 +38,19 @@ impl System {
   pub const JOYPAD1: u16 = 0x4016;
   pub const JOYPAD2: u16 = 0x4017;
 
-  pub fn new(cartridge: Cartridge, mut renderer: Box<dyn Renderer>) -> Self {
-    let mut apu = APU::new();
-    renderer.use_consumer(apu.mixer.consumer());
-
+  pub fn new(cartridge: Cartridge, renderer: Rc<RefCell<dyn Renderer>>) -> Self {
     System {
-      apu,
+      apu: APU::new(),
       ppu: PPU::new(cartridge.mapper),
       joypads: (Joypad::new(), Joypad::new()),
       renderer,
       cycles: 0,
       memory: Memory::new(),
     }
+  }
+
+  pub fn callback(&mut self) -> NESAudioCallback {
+    NESAudioCallback::new(self.apu.mixer.consumer())
   }
 
   pub fn read(&mut self, addr: u16) -> u8 {
@@ -109,7 +114,7 @@ impl System {
 
     if render {
       self.apu.mix();
-      self.renderer.render(&self.ppu.frame.data, &mut self.joypads.0);
+      self.renderer.borrow_mut().render(&self.ppu.frame.data, &mut self.joypads.0)
     }
   }
 

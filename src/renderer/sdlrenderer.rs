@@ -1,9 +1,8 @@
-use crate::apu::mixer::{Consumer, Mixer};
+use crate::apu::mixer::{Mixer, NESAudioCallback};
 use crate::ppu::frame::Frame;
 use crate::renderer::Renderer;
 use crate::system::joypad::{Flag as JoypadButton, Joypad};
 
-use ringbuf::traits::{Consumer as _, Observer as _};
 use sdl2::audio::{AudioCallback, AudioSpecDesired};
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
@@ -23,37 +22,11 @@ pub struct SDLRenderer {
   audio: AudioSubsystem,
 }
 
-pub struct Callback {
-  initialized: bool,
-  buffer: Consumer,
-}
-
-impl Callback {
-  fn new(buffer: Consumer) -> Self {
-    Callback {
-      initialized: false,
-      buffer,
-    }
-  }
-}
-
-impl AudioCallback for Callback {
+impl AudioCallback for NESAudioCallback {
   type Channel = f32;
 
   fn callback(&mut self, out: &mut [f32]) {
-    if !self.initialized && self.buffer.occupied_len() < out.len() {
-      out.fill(0.0);
-      return;
-    }
-    self.initialized = true;
-
-    for x in out {
-      if let Some(sample) = self.buffer.try_pop() {
-        *x = sample;
-      } else {
-        *x = 0.0;
-      }
-    }
+    self.signal(out);
   }
 }
 
@@ -108,25 +81,14 @@ impl Renderer for SDLRenderer {
       }
     }
   }
-
-  fn use_consumer(&mut self, consumer: Consumer) {
-    let audio_callback = Callback::new(consumer);
-
-    let audio = self.audio.open_playback(None, &AudioSpecDesired {
-      freq: Some(Mixer::OUTPUT_FREQ as i32),
-      channels: Some(1),
-      samples: Some(Mixer::BUFFER_SIZE as u16 / 2),
-    }, |_| audio_callback).unwrap();
-
-    audio.resume();
-    std::mem::forget(audio); // To ensure audio is not dropped
-  }
 }
 
 impl SDLRenderer {
   pub fn new() -> Self {
-    let sdl_context = sdl2::init().unwrap();
-    let mut window = sdl_context
+    let context = sdl2::init().unwrap();
+    let audio = context.audio().unwrap();
+    let event_pump = context.event_pump().unwrap();
+    let mut window = context
       .video()
       .unwrap()
       .window("NeoNES", (Frame::WIDTH * Frame::SCALE) as u32, (Frame::HEIGHT * Frame::SCALE) as u32)
@@ -138,14 +100,12 @@ impl SDLRenderer {
     window.set_icon(Surface::load_bmp_rw(&mut RWops::from_bytes(ICON).unwrap()).unwrap());
 
     let mut canvas = window.into_canvas().present_vsync().build().unwrap();
-    let event_pump = sdl_context.event_pump().unwrap();
 
     canvas
       .set_scale(Frame::SCALE as f32, Frame::SCALE as f32)
       .unwrap();
-    let texture_creator = canvas.texture_creator();
 
-    let audio = sdl_context.audio().unwrap();
+    let texture_creator = canvas.texture_creator();
 
     SDLRenderer {
       canvas,
@@ -153,5 +113,16 @@ impl SDLRenderer {
       event_pump,
       audio,
     }
+  }
+
+  pub fn use_callback(&mut self, callback: NESAudioCallback) {
+    let audio = self.audio.open_playback(None, &AudioSpecDesired {
+      freq: Some(Mixer::OUTPUT_FREQ as i32),
+      channels: Some(1),
+      samples: Some(Mixer::BUFFER_SIZE as u16 / 2),
+    }, |_| callback).unwrap();
+
+    audio.resume();
+    std::mem::forget(audio); // To ensure audio is not dropped
   }
 }

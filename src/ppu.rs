@@ -1,5 +1,5 @@
 mod color;
-pub(crate) mod frame;
+pub mod frame;
 mod palette;
 mod register;
 mod state;
@@ -28,7 +28,7 @@ pub struct PPU {
   sprites: SpriteState,
 }
 
-pub struct NMI {
+pub(crate) struct NMI {
   pending: bool,
   delay: u8,
   prev: bool,
@@ -207,7 +207,8 @@ impl PPU {
     if self.scan.line == PPU::VISIBLE_SCANLINES && self.scan.dot == 1 {
       self.registers.status.set_flag(StatusFlag::VBLankStarted);
 
-        self.nmi(true);
+      self.nmi(true);
+      self.frame.number = self.frame.number.wrapping_add(1);
       return true;
     }
 

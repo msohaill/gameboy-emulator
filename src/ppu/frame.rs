@@ -2,6 +2,7 @@ use super::color::Color;
 
 pub struct Frame {
   pub data: [u8; Frame::WIDTH * Frame::HEIGHT * Frame::SCALE],
+  pub number: usize,
 }
 
 impl Frame {
@@ -12,6 +13,7 @@ impl Frame {
   pub fn new() -> Self {
     Frame {
       data: [0; Frame::WIDTH * Frame::HEIGHT * Frame::SCALE],
+      number: 0,
     }
   }
 

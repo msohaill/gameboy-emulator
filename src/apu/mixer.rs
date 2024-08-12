@@ -2,7 +2,7 @@ use std::{mem::MaybeUninit, sync::Arc};
 
 use ringbuf::{
   storage::Owning,
-  traits::{Observer, Producer as _, Split},
+  traits::{Consumer as _, Observer, Producer as _, Split},
   wrap::caching::Caching,
   SharedRb,
   StaticRb,
@@ -13,7 +13,7 @@ use crate::cpu::CPU;
 use super::filter::{Filter, FilterKind};
 
 type Producer = Caching<Arc<SharedRb<Owning<[MaybeUninit<f32>; BUFFER_SIZE]>>>, true, false>;
-pub type Consumer = Caching<Arc<SharedRb<Owning<[MaybeUninit<f32>; BUFFER_SIZE]>>>, false, true>;
+type Consumer = Caching<Arc<SharedRb<Owning<[MaybeUninit<f32>; BUFFER_SIZE]>>>, false, true>;
 
 pub struct Mixer {
   producer: Producer,
@@ -28,12 +28,42 @@ struct Sampling {
   count: f32,
 }
 
+pub struct NESAudioCallback {
+  initialized: bool,
+  buffer: Consumer,
+}
+
 impl Sampling {
   fn new() -> Self {
     Sampling {
       fraction: 0.0,
       average: 0.0,
       count: 0.0,
+    }
+  }
+}
+
+impl NESAudioCallback {
+  pub fn new(buffer: Consumer) -> Self {
+    NESAudioCallback {
+      initialized: false,
+      buffer,
+    }
+  }
+
+  pub fn signal(&mut self, out: &mut[f32]) {
+    if !self.initialized && self.buffer.occupied_len() < out.len() {
+      out.fill(0.0);
+      return;
+    }
+    self.initialized = true;
+
+    for x in out {
+      if let Some(sample) = self.buffer.try_pop() {
+        *x = sample;
+      } else {
+        *x = 0.0;
+      }
     }
   }
 }
@@ -78,6 +108,7 @@ impl Mixer {
         let sample = self.filters.iter_mut()
           .fold(self.sampling.average / self.sampling.count, |s, filter| filter.process(s));
         if self.producer.try_push(sample).is_err() {
+          #[cfg(not(target_arch = "wasm32"))]
           std::thread::sleep(std::time::Duration::from_micros(10));
         }
 

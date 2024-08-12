@@ -72,7 +72,6 @@ macro_rules! bitflag {
     }
 
     #[derive(Copy, Clone)]
-
     pub enum Flag {
       #[allow(unused)]
       $zero,

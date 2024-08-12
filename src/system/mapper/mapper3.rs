@@ -52,7 +52,6 @@ impl Mapper3 {
       self.chr_ram[index]
     } else {
       self.chr_rom[index]
-
     }
   }
 
