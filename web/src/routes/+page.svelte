@@ -1,92 +1,17 @@
 <script lang="ts">
-  import init, { NeoNES, wasm_memory } from 'neones-web';
-  import audioWorker from '$lib/audio-worklet?worker&url';
-  import { Application, BufferImageSource, Sprite, Texture } from 'pixi.js';
-  import { onMount } from 'svelte';
+  import NeoNes from '$lib/components/NeoNES.svelte';
 
-  let nes: NeoNES;
+  let rom: Uint8Array;
   let files: FileList;
-  let canvas: HTMLCanvasElement;
-  let app: Application;
-  let source: BufferImageSource;
-  const keys = ["KeyW", "KeyA", "KeyS", "KeyD", "KeyN", "KeyM", "Enter", "Space"];
-  const noise = new Uint8Array(Array(256 * 240 * 4));
-
-  onMount(async () => {
-    await init();
-    app = new Application();
-    app.init({ width: 256, height: 240, canvas, resolution: 2.5 });
-
-    source = new BufferImageSource({ resource: noise, width: 256, height: 240, scaleMode: 'nearest' });
-    app.stage.addChild(Sprite.from(new Texture({ source })));
-
-    render();
-  });
-
-  const generateNoise = () => {
-    for (let i = 0; i < 256 * 240; i++) {
-      let n = Math.random();
-      noise[4 * i + 0] = n * 60;
-      noise[4 * i + 1] = n * 40;
-      noise[4 * i + 2] = n * 60;
-    }
-  }
-
-  const getFrame = () => new Uint8Array(wasm_memory().buffer, nes.frame(), 4 * 256 * 240);
-
-  const render = () => {
-    requestAnimationFrame(render);
-
-    if (nes) {
-      nes.step();
-      source.resource = getFrame();
-      source.update();
-    } else {
-      generateNoise();
-      source.update();
-    }
-  };
-
-  const setUpAudio = async () => {
-    if (!window.AudioContext) {
-      return;
-    }
-
-    const context = new window.AudioContext({ sampleRate: 44100 });
-    await context.audioWorklet.addModule(audioWorker);
-    const worklet = new AudioWorkletNode(context, 'nes-audio-processor', {
-      numberOfInputs: 0,
-      outputChannelCount: [1],
-    });
-
-    worklet.port.onmessage = (event) => {
-      let samples = new Float32Array(event.data.len);
-      nes.signal(samples);
-      worklet.port.postMessage({ samples });
-    }
-
-    worklet.connect(context.destination);
-  }
 
   const handleRom = async (files: FileList) => {
-    let rom = await files[0].arrayBuffer();
-    nes = new NeoNES(new Uint8Array(rom));
-    source.resource = getFrame();
-    source.update();
-    await setUpAudio();
-  }
-
-  const push = (e: KeyboardEvent) => {
-    if (nes && keys.includes(e.code)) nes.push(e.code);
-  }
-
-  const release = (e: KeyboardEvent) => {
-    if (nes && keys.includes(e.code)) nes.release(e.code);
+    rom = new Uint8Array(await files[0].arrayBuffer());
   }
 
   $: if (files) handleRom(files);
 </script>
 
-<svelte:window on:keydown={push} on:keyup={release} />
-<input type="file" id="file-upload" accept=".nes" bind:files />
-<canvas bind:this={canvas} />
+<div style="display: flex; flex-direction: column; align-items: center; gap: 50px">
+  <input type="file" id="file-upload" accept=".nes" bind:files />
+  <NeoNes bind:rom />
+</div>

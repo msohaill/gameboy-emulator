@@ -1,4 +1,3 @@
-mod color;
 pub mod frame;
 mod palette;
 mod register;

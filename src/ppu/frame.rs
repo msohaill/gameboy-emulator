@@ -1,4 +1,4 @@
-use super::color::Color;
+use super::palette::Color;
 
 pub struct Frame {
   pub data: [u8; Frame::WIDTH * Frame::HEIGHT * Frame::SCALE],
