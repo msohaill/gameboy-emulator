@@ -5,7 +5,7 @@ use std::{cell::RefCell, rc::Rc};
 use wasm_bindgen::prelude::*;
 use neones::{
   apu::mixer::NESAudioCallback,
-  neones::NeoNES,
+  neones::NeoNES as InnerNES,
   ppu::frame::Frame,
   renderer::Renderer,
   system::joypad::{Flag as JoypadButton, Joypad}
@@ -34,25 +34,25 @@ impl WebRenderer {
 }
 
 #[wasm_bindgen]
-pub struct NES {
-  neo: NeoNES,
+pub struct NeoNES {
+  emulator: InnerNES,
   frame: Rc<RefCell<Vec<u8>>>,
   audio: NESAudioCallback,
 }
 
 
 #[wasm_bindgen]
-impl NES {
+impl NeoNES {
   #[wasm_bindgen(constructor)]
   pub fn new(rom: Vec<u8>) -> Self {
     utils::set_panic_hook();
-    let frame = Rc::from(RefCell::from(vec![69; Frame::WIDTH * Frame::HEIGHT * 4]));
+    let frame = Rc::from(RefCell::from(vec![255; Frame::WIDTH * Frame::HEIGHT * 4]));
     let renderer = WebRenderer::new(frame.clone());
-    let mut neo = NeoNES::new(rom, Rc::from(RefCell::from(renderer)));
-    let audio = neo.audio();
+    let mut emulator = InnerNES::new(rom, Rc::from(RefCell::from(renderer)));
+    let audio = emulator.audio();
 
-    NES {
-      neo,
+    NeoNES {
+      emulator,
       frame,
       audio
     }
@@ -63,37 +63,37 @@ impl NES {
   }
 
   pub fn step(&mut self) {
-    self.neo.step_frame();
+    self.emulator.step_frame();
   }
 
   pub fn push(&mut self, key: &str) {
     match key {
-      "KeyW" => self.neo.push(JoypadButton::Up),
-      "KeyA" => self.neo.push(JoypadButton::Left),
-      "KeyS" => self.neo.push(JoypadButton::Down),
-      "KeyD" => self.neo.push(JoypadButton::Right),
+      "KeyW" => self.emulator.push(JoypadButton::Up),
+      "KeyA" => self.emulator.push(JoypadButton::Left),
+      "KeyS" => self.emulator.push(JoypadButton::Down),
+      "KeyD" => self.emulator.push(JoypadButton::Right),
 
-      "KeyN" => self.neo.push(JoypadButton::A),
-      "KeyM" => self.neo.push(JoypadButton::B),
+      "KeyN" => self.emulator.push(JoypadButton::A),
+      "KeyM" => self.emulator.push(JoypadButton::B),
 
-      "Enter" => self.neo.push(JoypadButton::Start),
-      "Space" => self.neo.push(JoypadButton::Select),
+      "Enter" => self.emulator.push(JoypadButton::Start),
+      "Space" => self.emulator.push(JoypadButton::Select),
       _ => ()
     }
   }
 
   pub fn release(&mut self, key: &str) {
     match key {
-      "KeyW" => self.neo.release(JoypadButton::Up),
-      "KeyA" => self.neo.release(JoypadButton::Left),
-      "KeyS" => self.neo.release(JoypadButton::Down),
-      "KeyD" => self.neo.release(JoypadButton::Right),
+      "KeyW" => self.emulator.release(JoypadButton::Up),
+      "KeyA" => self.emulator.release(JoypadButton::Left),
+      "KeyS" => self.emulator.release(JoypadButton::Down),
+      "KeyD" => self.emulator.release(JoypadButton::Right),
 
-      "KeyN" => self.neo.release(JoypadButton::A),
-      "KeyM" => self.neo.release(JoypadButton::B),
+      "KeyN" => self.emulator.release(JoypadButton::A),
+      "KeyM" => self.emulator.release(JoypadButton::B),
 
-      "Enter" => self.neo.release(JoypadButton::Start),
-      "Space" => self.neo.release(JoypadButton::Select),
+      "Enter" => self.emulator.release(JoypadButton::Start),
+      "Space" => self.emulator.release(JoypadButton::Select),
       _ => ()
     }
   }

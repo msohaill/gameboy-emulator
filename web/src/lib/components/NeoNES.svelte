@@ -1,15 +1,17 @@
 <script lang="ts">
   import init, { NeoNES, wasm_memory } from 'neones-web';
-  import audioWorker from '$lib/audio-worklet?worker&url';
+  import audioWorker from './audio-worklet?worker&url';
   import { Application, BufferImageSource, Sprite, Texture } from 'pixi.js';
   import { onMount } from 'svelte';
 
+  export let rom: Uint8Array;
+
   let nes: NeoNES;
-  let files: FileList;
   let canvas: HTMLCanvasElement;
   let app: Application;
   let source: BufferImageSource;
-  const keys = ["KeyW", "KeyA", "KeyS", "KeyD", "KeyN", "KeyM", "Enter", "Space"];
+
+  const KEYS = ["KeyW", "KeyA", "KeyS", "KeyD", "KeyN", "KeyM", "Enter", "Space"];
   const noise = new Uint8Array(Array(256 * 240 * 4));
 
   onMount(async () => {
@@ -42,8 +44,8 @@
       source.resource = getFrame();
       source.update();
     } else {
-      generateNoise();
-      source.update();
+      // generateNoise();
+      // source.update();
     }
   };
 
@@ -68,25 +70,21 @@
     worklet.connect(context.destination);
   }
 
-  const handleRom = async (files: FileList) => {
-    let rom = await files[0].arrayBuffer();
+  const push = (e: KeyboardEvent) => {
+    if (nes && KEYS.includes(e.code)) nes.push(e.code);
+  }
+
+  const release = (e: KeyboardEvent) => {
+    if (nes && KEYS.includes(e.code)) nes.release(e.code);
+  }
+
+  $: if(rom.length) (async () => {
     nes = new NeoNES(new Uint8Array(rom));
     source.resource = getFrame();
     source.update();
     await setUpAudio();
-  }
-
-  const push = (e: KeyboardEvent) => {
-    if (nes && keys.includes(e.code)) nes.push(e.code);
-  }
-
-  const release = (e: KeyboardEvent) => {
-    if (nes && keys.includes(e.code)) nes.release(e.code);
-  }
-
-  $: if (files) handleRom(files);
+  })();
 </script>
 
 <svelte:window on:keydown={push} on:keyup={release} />
-<input type="file" id="file-upload" accept=".nes" bind:files />
 <canvas bind:this={canvas} />
