@@ -1,3 +1,4 @@
+mod banks;
 mod mapper0;
 mod mapper1;
 mod mapper2;

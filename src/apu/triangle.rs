@@ -103,7 +103,6 @@ impl Triangle {
 
   pub fn signal(&self) -> f32 {
     if self.enabled && self.length.counter != 0 && self.linear.counter != 0 {
-      // println!("HERE: {}, {}, {}, {}", self.enabled, self.length.counter, self.linear.counter, self.step);
       if self.step & 0x10 != 0x10 {
         (self.step ^ 0xF) as f32
       } else {

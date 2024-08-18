@@ -1,13 +1,12 @@
-use super::{Mirroring, Mapper};
+use super::{banks::Banks, Mapper, Mirroring};
 
 const CHR_BANK_SIZE: usize = 0x2000;
 
 pub struct Mapper3 {
   mirroring: Mirroring,
-  chr_rom: Vec<u8>,
-  chr_ram: Vec<u8>,
-  prg_rom: Vec<u8>,
-  bank: u8,
+
+  chr: Banks,
+  prg_rom: Banks,
 }
 
 impl Mapper for Mapper3 {
@@ -17,16 +16,16 @@ impl Mapper for Mapper3 {
 
   fn read(&self, addr: u16) -> u8 {
     match addr {
-      0x0000 ..= 0x1FFF => self.chr_read(addr),
-      0x8000 ..= 0xFFFF => self.prg_rom_read(addr),
+      0x0000 ..= 0x1FFF => self.chr.read(addr),
+      0x8000 ..= 0xFFFF => self.prg_rom.read(addr),
       _ => 0,
     }
   }
 
   fn write(&mut self, addr: u16, val: u8) {
     match addr {
-      0x0000 ..= 0x1FFF => self.chr_write(addr, val),
-      0x8000 ..= 0xFFFF => self.bank_select(val),
+      0x0000 ..= 0x1FFF => self.chr.write(addr, val),
+      0x8000 ..= 0xFFFF => self.chr.set(0, val as usize),
       _ => { },
     }
   }
@@ -38,36 +37,8 @@ impl Mapper3 {
 
     Mapper3 {
       mirroring,
-      chr_rom,
-      chr_ram: if chr { vec![] } else { vec![0; 0x2000] },
-      prg_rom,
-      bank: 0,
+      chr: Banks::new(0x0000, 0x1FFF, CHR_BANK_SIZE, if chr { chr_rom } else { vec![0; 0x2000] }, !chr),
+      prg_rom: Banks::new(0x8000, 0xFFFF, 0x4000, prg_rom, false),
     }
-  }
-
-  fn chr_read(&self, addr: u16) -> u8 {
-    let index = (self.bank as usize * CHR_BANK_SIZE) + (addr as usize % CHR_BANK_SIZE);
-
-    if self.chr_rom.is_empty() {
-      self.chr_ram[index]
-    } else {
-      self.chr_rom[index]
-    }
-  }
-
-  fn chr_write(&mut self, addr: u16, val: u8) {
-    if !self.chr_ram.is_empty() {
-      let index = (self.bank as usize * CHR_BANK_SIZE) + (addr as usize % CHR_BANK_SIZE);
-      self.chr_ram[index] = val;
-    }
-  }
-
-  fn prg_rom_read(&self, addr: u16) -> u8 {
-    let index = addr as usize - 0x8000;
-    self.prg_rom[index]
-  }
-
-  fn bank_select(&mut self, bank: u8) {
-    self.bank = bank & 0x03;
   }
 }

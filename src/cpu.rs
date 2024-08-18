@@ -44,10 +44,10 @@ impl CPU {
   }
 
   fn step(&mut self) {
-    if self.system.poll_irq() {
-      self.interrupt(Interrupt::IRQ);
-    } else if self.system.poll_nmi() {
+    if self.system.poll_nmi() {
       self.interrupt(Interrupt::NMI);
+    } else if self.system.poll_irq() {
+      self.interrupt(Interrupt::IRQ);
     }
 
     let instruction = Instruction::get(self.read());

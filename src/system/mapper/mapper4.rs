@@ -1,23 +1,19 @@
-use super::{Mapper, MapperEvent, Mirroring};
+use super::{banks::Banks, Mapper, MapperEvent, Mirroring};
 
 const PRG_BANK_SIZE: usize = 0x2000;
 const CHR_BANK_SIZE: usize = 0x400;
 
 pub struct Mapper4 {
   mirroring: Mirroring,
-  chr_rom: Vec<u8>,
-  chr_ram: Vec<u8>,
-  prg_rom: Vec<u8>,
-  prg_ram: [u8; 0x2000],
 
+  chr: Banks,
+  prg_ram: Banks,
+  prg_rom: Banks,
+
+  select: u8,
   registers: [u8; 0x08],
-  index: u8,
-
-  chr: bool,
-  prg: bool,
 
   irq: IRQ,
-
   last: bool,
 }
 
@@ -48,25 +44,18 @@ impl Mapper for Mapper4 {
 
   fn read(&self, addr: u16) -> u8 {
     match addr {
-      0x0000 ..= 0x1FFF => self.chr_read(addr),
-      0x6000 ..= 0x7FFF => self.prg_ram_read(addr),
-      0x8000 ..= 0xFFFF => self.prg_rom_read(addr),
+      0x0000 ..= 0x1FFF => self.chr.read(addr),
+      0x6000 ..= 0x7FFF => self.prg_ram.read(addr),
+      0x8000 ..= 0xFFFF => self.prg_rom.read(addr),
       _ => 0,
     }
   }
 
   fn write(&mut self, addr: u16, val: u8) {
     match addr {
-      0x0000 ..= 0x1FFF => self.chr_write(addr, val),
-      0x6000 ..= 0x7FFF => self.prg_ram_write(addr, val),
-      0x8000 ..= 0x9FFF if addr % 2 == 0 => self.bank_select(val),
-      0x8000 ..= 0x9FFF if addr % 2 != 0 => self.bank_data(val),
-      0xA000 ..= 0xBFFF if addr % 2 == 0 => self.set_mirroring(val),
-      0xA000 ..= 0xBFFF if addr % 2 != 0 => { /* PRG RAM protect ?! */ },
-      0xC000 ..= 0xDFFF if addr % 2 == 0 => self.irq_latch(val),
-      0xC000 ..= 0xDFFF if addr % 2 != 0 => self.irq_reload(),
-      0xE000 ..= 0xFFFF if addr % 2 == 0 => self.irq_disable(),
-      0xE000 ..= 0xFFFF if addr % 2 != 0 => self.irq_enable(),
+      0x0000 ..= 0x1FFF => self.chr.write(addr, val),
+      0x6000 ..= 0x7FFF => self.prg_ram.write(addr, val),
+      0x8000 ..= 0xFFFF => self.write_registers(addr, val),
       _ => { },
     }
   }
@@ -87,7 +76,7 @@ impl Mapper for Mapper4 {
   }
 
   fn poll(&self) -> bool {
-      self.irq.pending
+    self.irq.pending
   }
 }
 
@@ -95,18 +84,63 @@ impl Mapper4 {
   pub fn new(chr_rom: Vec<u8>, prg_rom: Vec<u8>, mirroring: Mirroring) -> Self {
     let chr = !chr_rom.is_empty();
 
-    Mapper4 {
+    let mut mapper = Mapper4 {
       mirroring,
-      chr_rom,
-      chr_ram: if chr { vec![] } else { vec![0; 0x2000] },
-      prg_rom,
-      prg_ram: [0; 0x2000],
+      chr: Banks::new(0x0000, 0x1FFFF, CHR_BANK_SIZE, if chr { chr_rom } else { vec![0; 0x2000] }, !chr),
+      prg_ram: Banks::new(0x6000, 0x7FFF, PRG_BANK_SIZE, vec![0; 0x2000], true),
+      prg_rom: Banks::new(0x8000, 0xFFFF, PRG_BANK_SIZE, prg_rom, false),
+
+      select: 0x0,
       registers: [0; 0x08],
-      index: 0x0,
-      chr: false,
-      prg: false,
+
       irq: IRQ::new(),
       last: false,
+    };
+
+    mapper.prg_rom.set(2, mapper.prg_rom.last() - 1);
+    mapper.prg_rom.set(3, mapper.prg_rom.last());
+    mapper
+  }
+
+  fn update_banks(&mut self) {
+    if self.select & 0x40 == 0x0 {
+      self.prg_rom.set(0, self.registers[6] as usize);
+      self.prg_rom.set(2, self.prg_rom.last() - 1);
+    } else {
+      self.prg_rom.set(0, self.prg_rom.last() - 1);
+      self.prg_rom.set(2, self.registers[6] as usize);
+    }
+    self.prg_rom.set(1, self.registers[7] as usize);
+    self.prg_rom.set(3, self.prg_rom.last());
+
+    if self.select & 0x80 == 0x0 {
+      self.chr.set_range(0, 1, self.registers[0] as usize & 0xFE);
+      self.chr.set_range(2, 3, self.registers[1] as usize & 0xFE);
+      self.chr.set(4, self.registers[2] as usize);
+      self.chr.set(5, self.registers[3] as usize);
+      self.chr.set(6, self.registers[4] as usize);
+      self.chr.set(7, self.registers[5] as usize);
+    } else {
+      self.chr.set(0, self.registers[2] as usize);
+      self.chr.set(1, self.registers[3] as usize);
+      self.chr.set(2, self.registers[4] as usize);
+      self.chr.set(3, self.registers[5] as usize);
+      self.chr.set_range(4, 5, self.registers[0] as usize & 0xFE);
+      self.chr.set_range(6, 7, self.registers[1] as usize & 0xFE);
+    }
+  }
+
+  fn write_registers(&mut self, addr: u16, val: u8) {
+    match addr {
+      0x8000 ..= 0x9FFF if addr % 2 == 0 => self.bank_select(val),
+      0x8000 ..= 0x9FFF if addr % 2 != 0 => self.bank_data(val),
+      0xA000 ..= 0xBFFF if addr % 2 == 0 => self.set_mirroring(val),
+      0xA000 ..= 0xBFFF if addr % 2 != 0 => { /* PRG RAM protect ?! */ },
+      0xC000 ..= 0xDFFF if addr % 2 == 0 => self.irq_latch(val),
+      0xC000 ..= 0xDFFF if addr % 2 != 0 => self.irq_reload(),
+      0xE000 ..= 0xFFFF if addr % 2 == 0 => self.irq_disable(),
+      0xE000 ..= 0xFFFF if addr % 2 != 0 => self.irq_enable(),
+      _ => unreachable!("Should not happen!"),
     }
   }
 
@@ -124,89 +158,25 @@ impl Mapper4 {
     self.irq.reload = false;
   }
 
-  fn chr_read(&self, addr: u16) -> u8 {
-
-    let bank = match addr {
-      0x0000 ..= 0x03FF if self.chr => self.registers[2] as usize,
-      0x0000 ..= 0x03FF if !self.chr => self.registers[0] as usize & 0xFE,
-
-      0x0400 ..= 0x07FF if self.chr => self.registers[3] as usize,
-      0x0400 ..= 0x07FF if !self.chr => self.registers[0] as usize | 0x01,
-
-      0x0800 ..= 0x0BFF if self.chr => self.registers[4] as usize,
-      0x0800 ..= 0x0BFF if !self.chr => self.registers[1] as usize & 0xFE,
-
-      0x0C00 ..= 0x0FFF if self.chr => self.registers[5] as usize,
-      0x0C00 ..= 0x0FFF if !self.chr => self.registers[1] as usize | 0x01,
-
-      0x1000 ..= 0x13FF if self.chr => self.registers[0] as usize & 0xFE,
-      0x1000 ..= 0x13FF if !self.chr => self.registers[2] as usize,
-
-      0x1400 ..= 0x17FF if self.chr => self.registers[0] as usize | 0x01,
-      0x1400 ..= 0x17FF if !self.chr => self.registers[3] as usize,
-
-      0x1800 ..= 0x1BFF if self.chr => self.registers[1] as usize & 0xFE,
-      0x1800 ..= 0x1BFF if !self.chr => self.registers[4] as usize,
-
-      0x1C00 ..= 0x1FFF if self.chr => self.registers[1] as usize | 0x01,
-      0x1C00 ..= 0x1FFF if !self.chr => self.registers[5] as usize,
-
-      _ => unreachable!("Should never happen!"),
-    };
-
-    let index = (bank * CHR_BANK_SIZE) + (addr as usize % CHR_BANK_SIZE);
-    let chr = if self.chr_rom.is_empty() { &self.chr_ram } else { &self.chr_rom };
-    chr[index]
-  }
-
-  fn prg_ram_read(&self, addr: u16) -> u8 {
-    let index = addr as usize - 0x6000;
-    self.prg_ram[index]
-  }
-
-  fn prg_rom_read(&self, addr: u16) -> u8 {
-    let bank = match addr {
-      0x8000 ..= 0x9FFF if self.prg => (self.prg_rom.len() / PRG_BANK_SIZE) - 2,
-      0x8000 ..= 0x9FFF if !self.prg => self.registers[6] as usize,
-      0xA000 ..= 0xBFFF => self.registers[7] as usize,
-      0xC000 ..= 0xDFFF if self.prg => self.registers[6] as usize,
-      0xC000 ..= 0xDFFF if !self.prg => (self.prg_rom.len() / PRG_BANK_SIZE) - 2,
-      0xE000 ..= 0xFFFF => (self.prg_rom.len() / PRG_BANK_SIZE) - 1,
-      _ => unreachable!("Should never happen!"),
-    };
-
-    let index = (bank * PRG_BANK_SIZE) + (addr as usize % PRG_BANK_SIZE);
-    self.prg_rom[index]
-  }
-
-  fn chr_write(&mut self, addr: u16, val: u8) {
-    if !self.chr_ram.is_empty() {
-      let index = addr as usize % self.chr_ram.len();
-      self.chr_ram[index] = val;
-    }
-  }
-
-  fn prg_ram_write(&mut self, addr: u16, val: u8) {
-    let index = addr as usize - 0x6000;
-    self.prg_ram[index] = val;
-  }
-
   fn bank_select(&mut self, val: u8) {
-    self.index = val & 0x07;
-    self.prg = val & 0x40 != 0x0;
-    self.chr = val & 0x80 != 0x0;
+    self.select = val;
+    self.update_banks();
   }
 
   fn bank_data(&mut self, val: u8) {
-    self.registers[self.index as usize] = val;
+    self.registers[self.select as usize & 0x07] = val;
+    self.update_banks();
   }
 
   fn set_mirroring(&mut self, val: u8) {
     match self.mirroring {
       Mirroring::FourScreen =>  { }
-      _ => self.mirroring = match val & 0x01 == 0x01  {
-        false => Mirroring::Vertical,
-        true => Mirroring::Horizontal,
+      _ => {
+        self.mirroring = match val & 0x01 == 0x01  {
+          false => Mirroring::Vertical,
+          true => Mirroring::Horizontal,
+        };
+        self.update_banks();
       }
     }
   }

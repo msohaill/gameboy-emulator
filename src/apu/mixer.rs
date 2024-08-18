@@ -19,7 +19,7 @@ pub struct Mixer {
   producer: Producer,
   consumer: Option<Consumer>,
   sampling: Sampling,
-  filters: [Filter; 3],
+  filters: [Filter; 2],
 }
 
 struct Sampling {
@@ -85,8 +85,7 @@ impl Mixer {
       sampling: Sampling::new(),
       filters: [
         Filter::new(Mixer::OUTPUT_FREQ, 90.0, FilterKind::HighPass),
-        Filter::new(Mixer::OUTPUT_FREQ, 440.0, FilterKind::HighPass),
-        Filter::new(Mixer::OUTPUT_FREQ, 14000.0, FilterKind::LowPass)
+        Filter::new(Mixer::OUTPUT_FREQ, 5000.0, FilterKind::LowPass)
       ],
     }
   }

@@ -1,16 +1,13 @@
-use super::{Mirroring, Mapper};
+use super::{banks::Banks, Mapper, Mirroring};
 
-const PRG_BANK_SIZE: usize = 0x4000;
+const PRG_ROM_BANK_SIZE: usize = 0x4000;
 
 pub struct Mapper2 {
   mirroring: Mirroring,
-  chr_rom: Vec<u8>,
-  chr_ram: Vec<u8>,
-  prg_rom: Vec<u8>,
-  prg_ram: [u8; 0x2000],
 
-  first: usize,
-  last: usize,
+  chr: Banks,
+  prg_ram: Banks,
+  prg_rom: Banks,
 }
 
 impl Mapper for Mapper2 {
@@ -20,19 +17,18 @@ impl Mapper for Mapper2 {
 
   fn read(&self, addr: u16) -> u8 {
     match addr {
-      0x0000 ..= 0x1FFF => self.chr_read(addr),
-      0x6000 ..= 0x7FFF => self.prg_ram_read(addr),
-      0x8000 ..= 0xBFFF => self.first_read(addr),
-      0xC000 ..= 0xFFFF => self.last_read(addr),
+      0x0000 ..= 0x1FFF => self.chr.read(addr),
+      0x6000 ..= 0x7FFF => self.prg_ram.read(addr),
+      0x8000 ..= 0xFFFF => self.prg_rom.read(addr),
       _ => 0,
     }
   }
 
   fn write(&mut self, addr: u16, val: u8) {
     match addr {
-      0x0000 ..= 0x1FFF => self.chr_write(addr, val),
-      0x6000 ..= 0x7FFF => self.prg_ram_write(addr, val),
-      0x8000 ..= 0xFFFF => self.update_first(val),
+      0x0000 ..= 0x1FFF => self.chr.write(addr, val),
+      0x6000 ..= 0x7FFF => self.prg_ram.write(addr, val),
+      0x8000 ..= 0xFFFF => self.prg_rom.set(0, val as usize & 0x1F),
       _ => { },
     }
   }
@@ -40,57 +36,16 @@ impl Mapper for Mapper2 {
 
 impl Mapper2 {
   pub fn new(chr_rom: Vec<u8>, prg_rom: Vec<u8>, mirroring: Mirroring) -> Self {
-    let last = (prg_rom.len() / PRG_BANK_SIZE) - 1;
     let chr = !chr_rom.is_empty();
 
-    Mapper2 {
+    let mut mapper = Mapper2 {
       mirroring,
-      chr_rom,
-      chr_ram: if chr { vec![] } else { vec![0; 0x2000] },
-      prg_rom,
-      prg_ram: [0; 0x2000],
-      first: 0,
-      last,
-    }
-  }
+      chr: Banks::new(0x0000, 0x1FFF, 0x2000, if chr { chr_rom } else { vec![0; 0x2000] }, !chr),
+      prg_ram: Banks::new(0x6000, 0x7FFF, 0x2000, vec![0; 0x2000], true),
+      prg_rom: Banks::new(0x8000, 0xFFFF, PRG_ROM_BANK_SIZE, prg_rom, false),
+    };
 
-  fn chr_read(&self, addr: u16) -> u8 {
-    if self.chr_rom.is_empty() {
-      self.chr_ram[addr as usize % self.chr_ram.len()]
-    } else {
-      self.chr_rom[addr as usize % self.chr_rom.len()]
-
-    }
-  }
-
-  fn chr_write(&mut self, addr: u16, val: u8) {
-    if !self.chr_ram.is_empty() {
-      let index = addr as usize % self.chr_ram.len();
-      self.chr_ram[index] = val;
-    }
-  }
-
-  fn prg_ram_read(&self, addr: u16) -> u8 {
-    let index = addr as usize - 0x6000;
-    self.prg_ram[index]
-  }
-
-  fn prg_ram_write(&mut self, addr: u16, val: u8) {
-    let index = addr as usize - 0x6000;
-    self.prg_ram[index] = val;
-  }
-
-  fn first_read(&self, addr: u16) -> u8 {
-    let index = (self.first as usize * PRG_BANK_SIZE) + (addr as usize % PRG_BANK_SIZE);
-    self.prg_rom[index]
-  }
-
-  fn last_read(&self, addr: u16) -> u8 {
-    let index = (self.last as usize * PRG_BANK_SIZE) + (addr as usize % PRG_BANK_SIZE);
-    self.prg_rom[index]
-  }
-
-  fn update_first(&mut self, val: u8) {
-    self.first = val as usize & 0x1F;
+    mapper.prg_rom.set(1, mapper.prg_rom.last());
+    mapper
   }
 }
