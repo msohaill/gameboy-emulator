@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  @font-face {
+    font-family: Neo;
+    src: url(/fonts/neo.otf);
+  }
+
+  kbd {
+    @apply bg-stone-200 text-[#0e0e16] rounded inline-block text-xs font-bold leading-3 py-0.5 px-1;
+  }
+
+  .link {
+    @apply text-blue-300 font-semibold;
+  }
+}
+
+html {
+  @apply motion-safe:scroll-smooth bg-[#0e0e16];
+}
+
+* {
+  @apply text-stone-300;
+}
+
+main {
+  @apply py-7 px-14;
+}

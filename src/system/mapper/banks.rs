@@ -52,7 +52,7 @@ impl Banks {
   }
 
   pub fn read(&self, addr: u16) -> u8 {
-    self.memory[self.translate(addr)]
+    self.memory[self.translate(addr) % self.memory.len()]
   }
 
   pub fn write(&mut self, addr: u16, val: u8) {
