@@ -2,8 +2,9 @@
 name = "neones-web"
 version = "0.1.0"
 authors = ["Muhamamd Sohail <mhsohail56@gmail.com>"]
-license = "MIT"
-readme = "../README.md"
+license-file = "../../LICENSE"
+repository = "https://github.com/msohaill/neones"
+readme = "../../README.md"
 description = "A lightweight NES emulator written in Rust, for the web."
 edition = "2021"
 
