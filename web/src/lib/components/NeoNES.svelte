@@ -120,15 +120,12 @@
       if (pushed) nes.push(e.code);
       else nes.release(e.code);
     }
-  }
+  };
 
   $: if (!paused && visible && mounted) play();
 </script>
 
-<svelte:window
-  on:keydown={e => handleButton(e, true)}
-  on:keyup={e => handleButton(e, false)}
-/>
+<svelte:window on:keydown={e => handleButton(e, true)} on:keyup={e => handleButton(e, false)} />
 <div in:fly={{ x: 50, duration: 350, delay: 350 }} out:fly={{ x: -50, duration: 350, delay: 0 }}>
   <canvas bind:this={canvas} />
 </div>

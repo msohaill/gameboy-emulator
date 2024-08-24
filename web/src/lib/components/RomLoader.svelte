@@ -33,7 +33,9 @@
   $: if (files) handleRom(files);
 </script>
 
-<div class="flex flex-col w-3/5 lg:w-1/3 items-center border-white border-[0.5px] p-2 bg-[#0e0e16] text-center">
+<div
+  class="flex flex-col w-3/5 lg:w-1/3 items-center border-white border-[0.5px] p-2 bg-[#0e0e16] text-center"
+>
   <h1 class="text-md italic font-bold mb-4">Select a ROM</h1>
 
   <input type="file" id="file-upload" accept=".nes" hidden bind:files />

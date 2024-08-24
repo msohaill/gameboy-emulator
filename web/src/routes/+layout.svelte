@@ -11,7 +11,16 @@
 
 <svelte:head>
   {#if !dev}
-    <!-- Global site tag (gtag.js) - Google Analytics -->
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-9N3KWCHTCW"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() {
+        dataLayer.push(arguments);
+      }
+      gtag('js', new Date());
+      gtag('config', 'G-9N3KWCHTCW');
+    </script>
   {/if}
 </svelte:head>
 
